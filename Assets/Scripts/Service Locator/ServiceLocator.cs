@@ -1,0 +1,56 @@
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using Utilities.Utilities;
+
+namespace Service_Locator
+{
+    public class ServiceLocator : SingletonBehaviour<ServiceLocator>
+    {
+        private readonly Dictionary<string, object> _services = new();
+        
+        public void AddService(IService service)
+        {
+            //Add's the service to the dictionary
+            _services.Add(service.GetType().Name, service);
+
+            service.ServiceAdded();
+        }
+
+
+        /// <summary>
+        /// Locates a service by name.
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        public IService Locate(string name)
+        {
+            return (IService)_services[name];
+        }
+
+        /// <summary>
+        /// Locates a service by type.
+        /// </summary>
+        /// <param name="service"></param>
+        /// <typeparam name="TService"></typeparam>
+        public bool Locate<TService>(out TService service)
+        {
+            //Looks for the service in the dictionary
+            var foundService = _services.Values.First(i => i.GetType() == typeof(TService));
+
+            //Casts the service to the type we want
+            service = (TService)foundService;
+
+            //If the service is an IService, call OnLocate()
+            if (service is IService service1)
+            {
+                service1.OnLocate();
+                return true;
+            }
+            else Debug.LogError("Service is not an IService");
+
+
+            return false;
+        }
+    }
+}
