@@ -131,13 +131,13 @@ namespace AssetInventory
                 if (_disableMode)
                 {
                     EditorGUI.BeginDisabledGroup(_relLocation == null);
-                    if (GUILayout.Button("Revert relative persistence", GUILayout.Height(UIStyles.BIG_BUTTON_HEIGHT))) RevertRelative();
+                    if (GUILayout.Button("Revert relative persistence", UIStyles.mainButton, GUILayout.Height(UIStyles.BIG_BUTTON_HEIGHT))) RevertRelative();
                     EditorGUI.EndDisabledGroup();
                 }
                 else
                 {
                     EditorGUI.BeginDisabledGroup(string.IsNullOrWhiteSpace(_key));
-                    if (GUILayout.Button("Start conversion", GUILayout.Height(UIStyles.BIG_BUTTON_HEIGHT))) MakeRelative();
+                    if (GUILayout.Button("Start conversion", UIStyles.mainButton, GUILayout.Height(UIStyles.BIG_BUTTON_HEIGHT))) MakeRelative();
                     EditorGUI.EndDisabledGroup();
                 }
                 GUILayout.EndHorizontal();

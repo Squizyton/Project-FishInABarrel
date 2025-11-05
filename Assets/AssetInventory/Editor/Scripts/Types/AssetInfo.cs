@@ -79,6 +79,7 @@ namespace AssetInventory
         public string License { get; set; }
         public string LicenseLocation { get; set; }
         public DateTime LastRelease { get; set; }
+        public DateTime LastUpdate { get; set; } // e.g. deprecation, metadata...
         public DateTime PurchaseDate { get; set; }
         public DateTime FirstRelease { get; set; }
         public float AssetRating { get; set; }
@@ -825,6 +826,7 @@ namespace AssetInventory
                 LicenseLocation = LicenseLocation,
                 PurchaseDate = PurchaseDate,
                 LastRelease = LastRelease,
+                LastUpdate = LastUpdate,
                 FirstRelease = FirstRelease,
                 AssetRating = AssetRating,
                 RatingCount = RatingCount,

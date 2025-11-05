@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace AssetInventory
@@ -9,22 +10,21 @@ namespace AssetInventory
     {
         public RunActionStep()
         {
-            List<CustomAction> actions = DBAdapter.DB.Query<CustomAction>("select * from CustomAction order by Name");
             List<Tuple<string, ParameterValue>> options = new List<Tuple<string, ParameterValue>>();
-            foreach (CustomAction action in actions)
+            foreach (UpdateAction action in AI.Actions.Actions.Where(a => !a.hidden))
             {
-                options.Add(new Tuple<string, ParameterValue>(action.Name, new ParameterValue(action.Id)));
+                options.Add(new Tuple<string, ParameterValue>(action.name, new ParameterValue(action.key)));
             }
 
             Key = "RunAction";
             Name = "Run Action";
-            Description = "Run another custom action.";
+            Description = "Run another custom or predefined action.";
             Category = ActionCategory.Misc;
             Parameters.Add(new StepParameter
             {
                 Name = "Action",
                 Description = "Action to run.",
-                Type = StepParameter.ParamType.Int,
+                Type = StepParameter.ParamType.String,
                 ValueList = StepParameter.ValueType.Custom,
                 Options = options
             });
@@ -32,8 +32,19 @@ namespace AssetInventory
 
         public override async Task Run(List<ParameterValue> parameters)
         {
-            CustomAction action = DBAdapter.DB.Find<CustomAction>(parameters[0].intValue);
-            await AI.Actions.RunUserAction(action);
+            string key = parameters[0].stringValue;
+            if (key.StartsWith(ActionHandler.ACTION_USER))
+            {
+                // user actions are more complex and need to be triggered differently
+                int idx = int.Parse(key.Substring(ActionHandler.ACTION_USER.Length));
+                CustomAction action = DBAdapter.DB.Find<CustomAction>(idx);
+                await AI.Actions.RunUserAction(action);
+            }
+            else
+            {
+                // internal action
+                await AI.Actions.RunAction(key);
+            }
         }
     }
 }

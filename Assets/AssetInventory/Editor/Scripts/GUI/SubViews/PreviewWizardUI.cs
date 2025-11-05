@@ -1,5 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
 
@@ -8,6 +10,13 @@ namespace AssetInventory
     public sealed class PreviewWizardUI : BasicEditorUI
     {
         private const string BASE_JOIN = "inner join Asset on Asset.Id = AssetFile.AssetId where Asset.Exclude = false";
+
+        [Serializable]
+        private class TypeCount
+        {
+            public int Count { get; set; }
+            public string Type { get; set; }
+        }
 
         private Vector2 _scrollPos;
         private List<AssetInfo> _assets;
@@ -23,14 +32,16 @@ namespace AssetInventory
         private int _scheduledFiles;
         private int _imageFiles;
         private bool _showAdv;
+        private bool _showTypeBreakdown;
+        private List<TypeCount> _typeBreakdown;
         private PreviewPipeline _previewPipeline;
         private readonly IncorrectPreviewsValidator _validator = new IncorrectPreviewsValidator();
 
         public static PreviewWizardUI ShowWindow()
         {
             PreviewWizardUI window = GetWindow<PreviewWizardUI>("Previews Wizard");
-            window.minSize = new Vector2(430, 300);
-            window.maxSize = new Vector2(window.minSize.x, 500);
+            window.minSize = new Vector2(460, 300);
+            window.maxSize = new Vector2(window.minSize.x, 1500);
 
             return window;
         }
@@ -62,6 +73,10 @@ namespace AssetInventory
             _missingFiles = DBAdapter.DB.ExecuteScalar<int>($"{countQuery} {BASE_JOIN} and AssetFile.PreviewState = ? {assetFilter}", AssetFile.PreviewOptions.None);
             _noPrevFiles = DBAdapter.DB.ExecuteScalar<int>($"{countQuery} {BASE_JOIN} and AssetFile.PreviewState = ? {assetFilter}", AssetFile.PreviewOptions.NotApplicable);
             _scheduledFiles = DBAdapter.DB.ExecuteScalar<int>($"{countQuery} {BASE_JOIN} and (AssetFile.PreviewState = ? or AssetFile.PreviewState = ?) {assetFilter}", AssetFile.PreviewOptions.Redo, AssetFile.PreviewOptions.RedoMissing);
+
+            // Get type breakdown for scheduled files
+            string typeBreakdownQuery = $"select count(*) as Count, Type from AssetFile af left join Asset on Asset.Id = af.AssetId where (PreviewState = ? or PreviewState = ?) {assetFilter} group by Type";
+            _typeBreakdown = DBAdapter.DB.Query<TypeCount>(typeBreakdownQuery, AssetFile.PreviewOptions.Redo, AssetFile.PreviewOptions.RedoMissing).ToList();
         }
 
         private void Schedule(AssetFile.PreviewOptions state)
@@ -120,51 +135,22 @@ namespace AssetInventory
             EditorGUILayout.BeginHorizontal();
             GUILabelWithText("Total Files", $"{_totalFiles:N0}", labelWidth);
             EditorGUI.BeginDisabledGroup(_totalFiles == 0);
-            if (GUILayout.Button("Schedule Recreation", GUILayout.ExpandWidth(false))) Schedule();
+            if (GUILayout.Button("Schedule Recreation", GUILayout.ExpandWidth(false)))
+            {
+                if (EditorUtility.DisplayDialog("Confirm", $"Are you sure you want to schedule recreation for all {_totalFiles:N0} files? This will replace all existing previews.", "Continue", "Cancel"))
+                {
+                    Schedule();
+                }
+            }
             EditorGUI.EndDisabledGroup();
             EditorGUILayout.EndHorizontal();
 
-            EditorGUILayout.BeginHorizontal();
-            GUILabelWithText($"{UIStyles.INDENT}Pre-Provided", $"{_providedFiles:N0}", labelWidth, "Preview images that were provided with the package.");
-            EditorGUI.BeginDisabledGroup(_providedFiles == 0);
-            if (GUILayout.Button("Schedule Recreation", GUILayout.ExpandWidth(false))) Schedule(AssetFile.PreviewOptions.Provided);
-            EditorGUI.EndDisabledGroup();
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.BeginHorizontal();
-            GUILabelWithText($"{UIStyles.INDENT}Recreated", $"{_recreatedFiles:N0}", labelWidth, "Preview images that were recreated by Asset Inventory.");
-            EditorGUI.BeginDisabledGroup(_recreatedFiles == 0);
-            if (GUILayout.Button("Schedule Recreation", GUILayout.ExpandWidth(false))) Schedule(AssetFile.PreviewOptions.Custom);
-            EditorGUI.EndDisabledGroup();
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.BeginHorizontal();
-            GUILabelWithText($"{UIStyles.INDENT}Missing", $"{_missingFiles:N0}", labelWidth, "File that do not have a preview image yet but should have one.");
-            EditorGUI.BeginDisabledGroup(_missingFiles == 0);
-            if (GUILayout.Button("Schedule Recreation", GUILayout.ExpandWidth(false))) Schedule(AssetFile.PreviewOptions.None);
-            EditorGUI.EndDisabledGroup();
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.BeginHorizontal();
-            GUILabelWithText($"{UIStyles.INDENT}Erroneous", $"{_erroneousFiles:N0}", labelWidth, "Preview images where a previous recreation attempt failed.");
-            EditorGUI.BeginDisabledGroup(_erroneousFiles == 0);
-            if (GUILayout.Button("Schedule Recreation", GUILayout.ExpandWidth(false))) Schedule(AssetFile.PreviewOptions.Error);
-            EditorGUI.EndDisabledGroup();
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.BeginHorizontal();
-            GUILabelWithText($"{UIStyles.INDENT}Not Applicable", $"{_noPrevFiles:N0}", labelWidth, "Files for which typically no previews are created, e.g. documents, scripts, controllers. Only a generic icon will be shown.");
-            EditorGUI.BeginDisabledGroup(_noPrevFiles == 0);
-            if (ShowAdvanced() && GUILayout.Button("Schedule Recreation", GUILayout.ExpandWidth(false))) Schedule(AssetFile.PreviewOptions.NotApplicable);
-            EditorGUI.EndDisabledGroup();
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.BeginHorizontal();
-            GUILabelWithText($"{UIStyles.INDENT}Using Original", $"{_originalFiles:N0}", labelWidth, "Image files that are used directly as previews since they are small and don't need recreation.");
-            EditorGUI.BeginDisabledGroup(_originalFiles == 0 || AI.Config.directMediaPreviews);
-            if (ShowAdvanced() && GUILayout.Button("Schedule Recreation", GUILayout.ExpandWidth(false))) Schedule(AssetFile.PreviewOptions.UseOriginal);
-            EditorGUI.EndDisabledGroup();
-            EditorGUILayout.EndHorizontal();
+            DrawPreviewStateRow("Pre-Provided", _providedFiles, labelWidth, AssetFile.PreviewOptions.Provided, "Preview images that were provided with the package.");
+            DrawPreviewStateRow("Recreated", _recreatedFiles, labelWidth, AssetFile.PreviewOptions.Custom, "Preview images that were recreated by Asset Inventory.");
+            DrawPreviewStateRow("Missing", _missingFiles, labelWidth, AssetFile.PreviewOptions.None, "File that do not have a preview image yet but should have one.");
+            DrawPreviewStateRow("Erroneous", _erroneousFiles, labelWidth, AssetFile.PreviewOptions.Error, "Preview images where a previous recreation attempt failed.");
+            DrawPreviewStateRow("Not Applicable", _noPrevFiles, labelWidth, AssetFile.PreviewOptions.NotApplicable, "Files for which typically no previews are created, e.g. documents, scripts, controllers. Only a generic icon will be shown.", advancedOnly: true);
+            DrawPreviewStateRow("Using Original", _originalFiles, labelWidth, AssetFile.PreviewOptions.UseOriginal, "Image files that are used directly as previews since they are small and don't need recreation.", advancedOnly: true, additionalDisableCondition: AI.Config.directMediaPreviews);
 
             EditorGUILayout.BeginHorizontal();
             GUILabelWithText("Image Files", $"{_imageFiles:N0}", labelWidth);
@@ -178,6 +164,42 @@ namespace AssetInventory
 
             EditorGUILayout.Space();
             GUILabelWithText("Scheduled", $"{_scheduledFiles:N0}", labelWidth);
+
+            EditorGUILayout.Space();
+            UIStyles.DrawUILine(Color.grey, 1, 5);
+            _showTypeBreakdown = EditorGUILayout.BeginFoldoutHeaderGroup(_showTypeBreakdown, "Scheduled by Type");
+            if (_showTypeBreakdown)
+            {
+                if (_typeBreakdown != null && _typeBreakdown.Count > 0)
+                {
+                    EditorGUILayout.BeginVertical(GUI.skin.box);
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField("Type", EditorStyles.boldLabel, GUILayout.Width(200));
+                    EditorGUILayout.LabelField("Count", EditorStyles.boldLabel, GUILayout.Width(100));
+                    EditorGUILayout.EndHorizontal();
+
+                    foreach (var item in _typeBreakdown.OrderByDescending(t => t.Count))
+                    {
+                        EditorGUILayout.BeginHorizontal();
+                        EditorGUILayout.LabelField($"{UIStyles.INDENT}{item.Type}", GUILayout.Width(200));
+                        EditorGUILayout.LabelField($"{item.Count:N0}", GUILayout.Width(100));
+
+                        GUILayout.FlexibleSpace();
+                        if (GUILayout.Button(EditorGUIUtility.IconContent("TreeEditor.Trash", "|Remove this type from queue"), GUILayout.Width(25), GUILayout.Height(18)))
+                        {
+                            ClearQueue(item.Type);
+                        }
+
+                        EditorGUILayout.EndHorizontal();
+                    }
+                    EditorGUILayout.EndVertical();
+                }
+                else
+                {
+                    EditorGUILayout.LabelField($"{UIStyles.INDENT}No files scheduled for recreation.", EditorStyles.wordWrappedLabel);
+                }
+            }
+            EditorGUILayout.EndFoldoutHeaderGroup();
 
             EditorGUILayout.Space();
             _showAdv = EditorGUILayout.BeginFoldoutHeaderGroup(_showAdv, "Advanced");
@@ -197,10 +219,16 @@ namespace AssetInventory
                 {
                     RestorePreviews();
                 }
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button(UIStyles.Content("Clean Queue", "Will remove accidentally scheduled items for which no preview can be created (e.g. cs files)."), GUILayout.Width(200)))
+                {
+                    CleanQueue();
+                }
                 if (GUILayout.Button(UIStyles.Content("Clear Queue", "Will remove the scheduled items from the queue again."), GUILayout.Width(200)))
                 {
                     ClearQueue();
                 }
+                EditorGUILayout.EndHorizontal();
                 EditorGUI.EndDisabledGroup();
             }
             EditorGUILayout.EndFoldoutHeaderGroup();
@@ -236,7 +264,7 @@ namespace AssetInventory
                 EditorGUI.BeginDisabledGroup(_scheduledFiles == 0);
                 if (GUILayout.Button($"Recreate {_scheduledFiles:N0} Scheduled", UIStyles.mainButton, GUILayout.Height(UIStyles.BIG_BUTTON_HEIGHT)))
                 {
-                    RecreatePreviews();
+                    _ = RecreatePreviews();
                 }
                 EditorGUI.EndDisabledGroup();
                 if (GUILayout.Button(UIStyles.Content("Verify", "Inspect all preview images and check for issues like containing Unity default placeholders or shader errors."), GUILayout.Width(buttonWidth), GUILayout.Height(UIStyles.BIG_BUTTON_HEIGHT))) InspectPreviews();
@@ -245,23 +273,70 @@ namespace AssetInventory
             }
         }
 
-        private void ClearQueue()
+        private void CleanQueue()
         {
-            if (!EditorUtility.DisplayDialog("Confirm", "Are you sure you want to clear the preview recreation queue? The previous state of items is not always known (except for missing). This might result in items being marked as recreated instead of pre-provided. That is usually not an issue though.", "Continue", "Cancel")) return;
+            List<string> types = new List<string>();
+            types.AddRange(AI.TypeGroups[AI.AssetGroup.Audio]);
+            types.AddRange(AI.TypeGroups[AI.AssetGroup.Fonts]);
+            types.AddRange(AI.TypeGroups[AI.AssetGroup.Images]);
+            types.AddRange(AI.TypeGroups[AI.AssetGroup.Materials]);
+            types.AddRange(AI.TypeGroups[AI.AssetGroup.Models]);
+            types.AddRange(AI.TypeGroups[AI.AssetGroup.Prefabs]);
+            types.AddRange(AI.TypeGroups[AI.AssetGroup.Videos]);
+            string previewTypes = "'" + string.Join("','", types) + "'";
 
             string assetFilter = PreviewPipeline.GetAssetFilter(_assets, "AssetId");
             string query = $@"
                 UPDATE AssetFile
                 SET PreviewState = ?
                 WHERE 
-                  PreviewState = ?
+                  (PreviewState = ? or PreviewState = ?)
+                  AND (
+                      Type NOT IN ({previewTypes})
+                  )
                   AND AssetId IN (
                       SELECT Id FROM Asset WHERE Exclude = 0
                   )
                   {assetFilter};
                 ";
-            DBAdapter.DB.Execute(query, AssetFile.PreviewOptions.None, AssetFile.PreviewOptions.RedoMissing);
-            DBAdapter.DB.Execute(query, AssetFile.PreviewOptions.Custom, AssetFile.PreviewOptions.Redo);
+            DBAdapter.DB.Execute(query, AssetFile.PreviewOptions.NotApplicable, AssetFile.PreviewOptions.Redo, AssetFile.PreviewOptions.RedoMissing);
+
+            GeneratePreviewOverview();
+        }
+
+        private void ClearQueue(string type = null)
+        {
+            string confirmMessage = type != null
+                ? $"Are you sure you want to remove all '{type}' files from the preview recreation queue?"
+                : "Are you sure you want to clear the preview recreation queue? The previous state of items is not always known (except for missing). This might result in items being marked as recreated instead of pre-provided. That is usually not an issue though.";
+
+            if (!EditorUtility.DisplayDialog("Confirm", confirmMessage, "Continue", "Cancel")) return;
+
+            string assetFilter = PreviewPipeline.GetAssetFilter(_assets, "AssetId");
+            string typeFilter = type != null ? "AND Type = ?" : "";
+
+            string query = $@"
+                UPDATE AssetFile
+                SET PreviewState = ?
+                WHERE 
+                  PreviewState = ?
+                  {typeFilter}
+                  AND AssetId IN (
+                      SELECT Id FROM Asset WHERE Exclude = 0
+                  )
+                  {assetFilter};
+                ";
+
+            if (type != null)
+            {
+                DBAdapter.DB.Execute(query, AssetFile.PreviewOptions.None, AssetFile.PreviewOptions.RedoMissing, type);
+                DBAdapter.DB.Execute(query, AssetFile.PreviewOptions.Custom, AssetFile.PreviewOptions.Redo, type);
+            }
+            else
+            {
+                DBAdapter.DB.Execute(query, AssetFile.PreviewOptions.None, AssetFile.PreviewOptions.RedoMissing);
+                DBAdapter.DB.Execute(query, AssetFile.PreviewOptions.Custom, AssetFile.PreviewOptions.Redo);
+            }
 
             GeneratePreviewOverview();
         }
@@ -309,8 +384,10 @@ namespace AssetInventory
             GeneratePreviewOverview();
         }
 
-        private async void RecreatePreviews()
+        private async Task RecreatePreviews()
         {
+            CleanQueue();
+
             _previewPipeline = new PreviewPipeline();
             AI.Actions.RegisterRunningAction(ActionHandler.ACTION_PREVIEWS_RECREATE, _previewPipeline, "Recreating previews");
             int created = await _previewPipeline.RecreateScheduledPreviews(_assets, _allAssets);
@@ -325,6 +402,63 @@ namespace AssetInventory
         private void OnInspectorUpdate()
         {
             Repaint();
+        }
+
+        private void OpenSearchWithFilter(AssetFile.PreviewOptions previewState)
+        {
+            // Get the IndexUI window (assuming it's already open)
+            IndexUI indexWindow = GetWindow<IndexUI>(null, false);
+            if (indexWindow == null) return;
+
+            // Build search phrase based on preview state
+            string searchPhrase = $"=AssetFile.PreviewState={(int)previewState}";
+
+            // If _assets is null or empty, pass null to search all packages
+            // Otherwise, pass the first asset to filter by that package
+            AssetInfo filterAsset = (_assets != null && _assets.Count > 0) ? _assets[0] : null;
+
+            indexWindow.OpenInSearch(filterAsset, force: true, showFilterTab: true, searchPhrase: searchPhrase);
+            indexWindow.Focus();
+        }
+
+        private void DrawPreviewStateRow(string label, int count, int labelWidth, AssetFile.PreviewOptions previewState, string tooltip, bool advancedOnly = false, bool additionalDisableCondition = false)
+        {
+            EditorGUILayout.BeginHorizontal();
+            GUILabelWithText($"{UIStyles.INDENT}{label}", $"{count:N0}", labelWidth, tooltip);
+
+            if (!advancedOnly || ShowAdvanced())
+            {
+                if (GUILayout.Button(EditorGUIUtility.IconContent("Search Icon", "|Show in Search"), GUILayout.Width(25), GUILayout.Height(18)))
+                {
+                    OpenSearchWithFilter(previewState);
+                }
+            }
+
+            EditorGUI.BeginDisabledGroup(count == 0 || additionalDisableCondition);
+            if (!advancedOnly || ShowAdvanced())
+            {
+                if (GUILayout.Button("Schedule Recreation", GUILayout.ExpandWidth(false)))
+                {
+                    bool shouldSchedule = true;
+
+                    if (previewState == AssetFile.PreviewOptions.Error)
+                    {
+                        shouldSchedule = EditorUtility.DisplayDialog("Confirm", $"Are you sure you want to schedule recreation for {count:N0} erroneous files? These files had previous recreation errors, probably due to shader errors.", "Continue", "Cancel");
+                    }
+                    else if (previewState == AssetFile.PreviewOptions.NotApplicable)
+                    {
+                        shouldSchedule = EditorUtility.DisplayDialog("Confirm", $"Are you sure you want to schedule recreation for {count:N0} files marked as not applicable? These files typically don't have previews (e.g., scripts, documents).", "Continue", "Cancel");
+                    }
+
+                    if (shouldSchedule)
+                    {
+                        Schedule(previewState);
+                    }
+                }
+            }
+            EditorGUI.EndDisabledGroup();
+
+            EditorGUILayout.EndHorizontal();
         }
     }
 }

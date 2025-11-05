@@ -45,7 +45,7 @@ namespace AssetInventory
                 ApplyPackageTags(spec, asset);
             }
         }
-        
+
         private Asset HandlePackage(string package, Asset parent = null, AssetFile subPackage = null)
         {
             Asset asset = new Asset();
@@ -92,6 +92,17 @@ namespace AssetInventory
             asset.PackageSize = size;
             asset.LastRelease = fInfo.LastWriteTime;
             Persist(asset);
+
+            // optional preview image in a png file next to the package
+            string assetPreviewFile = asset.GetLocation(true) + ".icon.png";
+            if (File.Exists(assetPreviewFile))
+            {
+                string targetDir = Path.Combine(AI.GetPreviewFolder(), asset.Id.ToString());
+                string targetFile = Path.Combine(targetDir, "a-" + asset.Id + Path.GetExtension(assetPreviewFile));
+                Directory.CreateDirectory(targetDir);
+                File.Copy(assetPreviewFile, targetFile, true);
+            }
+
             ApplyOverrides(asset);
 
             return asset;
@@ -116,6 +127,7 @@ namespace AssetInventory
             FolderSpec importSpec = GetDefaultImportSpec();
             importSpec.location = IOUtils.ToShortPath(tempPath);
             importSpec.createPreviews = spec.createPreviews;
+            importSpec.excludedExtensions = spec.excludedExtensions;
 
             MediaImporter mediaImporter = new MediaImporter();
             AI.Actions.RegisterRunningAction(ActionHandler.ACTION_MEDIA_FOLDERS_INDEX, mediaImporter, "Updating media folder index");

@@ -20,6 +20,14 @@ namespace AssetInventory
         private static readonly Regex IncludeFilesRegex = new Regex(@"#include(?:_with_pragmas)?\s*""(.+?)""", RegexOptions.Compiled);
         private static readonly Regex CustomEditorRegex = new Regex(@"CustomEditor\s*""(.+?)""", RegexOptions.Compiled); // Regex to match custom editor lines and capture names
 
+        // Thread-safe unique temp folder for this analysis instance
+        private readonly string _uniqueTempFolder;
+        private readonly string _uniqueTempFolderPath;
+
+        // Cached pipeline checks to avoid repeated calls during dependency analysis
+        private readonly bool _isOnURP;
+        private readonly bool _isOnHDRP;
+
         private static readonly string[] ScanDependencies =
         {
             "prefab", "mat", "controller", "overridecontroller", "anim", "asset", "physicmaterial", "physicsmaterial",
@@ -32,9 +40,60 @@ namespace AssetInventory
             "shader", "ttf", "otf", "js", "obj", "fbx", "uxml", "uss", "inputactions", "tss", "nn", "cs"
         };
 
+        public DependencyAnalysis()
+        {
+            // Generate unique temp folder name with GUID suffix for thread safety
+            string uniqueId = Guid.NewGuid().ToString("N").Substring(0, 8);
+            _uniqueTempFolder = $"{AI.TEMP_FOLDER}_{uniqueId}";
+            _uniqueTempFolderPath = Path.Combine(Application.dataPath, _uniqueTempFolder);
+
+            // Cache pipeline checks once per analysis session
+            _isOnURP = AssetUtils.IsOnURP();
+            _isOnHDRP = AssetUtils.IsOnHDRP();
+        }
+
         public static bool NeedsScan(string type)
         {
             return ScanDependencies.Contains(type) || ScanMetaDependencies.Contains(type);
+        }
+
+        /// <summary>
+        /// Cleans up all temporary folders used for dependency analysis.
+        /// This should be called during application initialization to remove orphaned folders from previous sessions.
+        /// </summary>
+        public static void CleanUp()
+        {
+            try
+            {
+                string assetsPath = Application.dataPath;
+                if (!Directory.Exists(assetsPath)) return;
+
+                // Find all temp folders matching the pattern _AssetInventoryTemp*
+                string[] allDirs = Directory.GetDirectories(assetsPath, $"{AI.TEMP_FOLDER}*", SearchOption.TopDirectoryOnly);
+                foreach (string dir in allDirs)
+                {
+                    try
+                    {
+                        string dirName = Path.GetFileName(dir);
+                        // Only delete folders that match our pattern (base name or base name with underscore and ID)
+                        if (dirName == AI.TEMP_FOLDER || dirName.StartsWith(AI.TEMP_FOLDER + "_"))
+                        {
+                            Directory.Delete(dir, true);
+                            string metaFile = dir + ".meta";
+                            if (File.Exists(metaFile)) File.Delete(metaFile);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogWarning($"Could not remove temporary dependency analysis folder '{dir}': {e.Message}");
+                    }
+                }
+                AssetDatabase.Refresh();
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"Could not clean up temporary dependency analysis folders: {e.Message}");
+            }
         }
 
         public async Task Analyze(AssetInfo info, CancellationToken ct)
@@ -96,12 +155,11 @@ namespace AssetInventory
             info.MediaDependencies = info.Dependencies.Where(af => af.Type != "cs" && af.Type != "dll").ToList();
             info.ScriptDependencies = info.Dependencies.Where(af => af.Type == "cs" || af.Type == "dll").ToList();
 
-            // clean-up again on-demand
-            string tempDir = Path.Combine(Application.dataPath, AI.TEMP_FOLDER);
-            if (Directory.Exists(tempDir))
+            // clean-up again on-demand - use unique temp folder for this instance
+            if (Directory.Exists(_uniqueTempFolderPath))
             {
-                await IOUtils.DeleteFileOrDirectory(tempDir);
-                await IOUtils.DeleteFileOrDirectory(tempDir + ".meta");
+                await IOUtils.DeleteFileOrDirectory(_uniqueTempFolderPath);
+                await IOUtils.DeleteFileOrDirectory(_uniqueTempFolderPath + ".meta");
                 AssetDatabase.Refresh();
             }
             if (info.DependencyState == DependencyStateOptions.Calculating) info.DependencyState = DependencyStateOptions.Done; // otherwise error along the way
@@ -249,10 +307,9 @@ namespace AssetInventory
             {
                 // reserialize prefabs on-the-fly by copying them over which will cause Unity to change the encoding upon refresh
                 // this will not work but throw missing script errors instead if there are any attached
-                string targetDir = Path.Combine(Application.dataPath, AI.TEMP_FOLDER);
-                Directory.CreateDirectory(targetDir);
+                Directory.CreateDirectory(_uniqueTempFolderPath);
 
-                string targetFile = Path.Combine("Assets", AI.TEMP_FOLDER, Path.GetFileName(path));
+                string targetFile = Path.Combine("Assets", _uniqueTempFolder, Path.GetFileName(path));
 
                 // file can be locked, retry automatically
                 if (!await IOUtils.TryCopyFile(path, targetFile, true))
@@ -347,8 +404,8 @@ namespace AssetInventory
                     // break-out to other package
                     Asset crossAsset = null;
                     List<Asset> candidates = DBAdapter.DB.Table<Asset>().Where(a => a.Id == af.AssetId).ToList();
-                    if (crossAsset == null && AssetUtils.IsOnURP()) crossAsset = candidates.FirstOrDefault(a => a.SafeName.ToLowerInvariant().Contains("urp"));
-                    if (crossAsset == null && AssetUtils.IsOnHDRP()) crossAsset = candidates.FirstOrDefault(a => a.SafeName.ToLowerInvariant().Contains("hdrp"));
+                    if (crossAsset == null && _isOnURP) crossAsset = candidates.FirstOrDefault(a => a.SafeName.ToLowerInvariant().Contains("urp"));
+                    if (crossAsset == null && _isOnHDRP) crossAsset = candidates.FirstOrDefault(a => a.SafeName.ToLowerInvariant().Contains("hdrp"));
                     if (crossAsset == null) crossAsset = candidates.FirstOrDefault();
                     if (crossAsset != null)
                     {
@@ -371,48 +428,41 @@ namespace AssetInventory
             return result.Distinct().ToList();
         }
 
-        private static void PreparePipelineDependencies(AssetInfo info)
+        private void PreparePipelineDependencies(AssetInfo info)
         {
             info.SRPOriginalBackup = null;
             info.SRPSupportPackage = null;
             info.SRPMainReplacement = null;
             info.SRPUsed = false;
 
-            string targetSRP;
-            string targetSRPAlt;
             string targetSRPVersion;
-            if (AssetUtils.IsOnURP())
+            if (_isOnURP)
             {
-                targetSRP = "urp";
-                targetSRPAlt = "lightweight";
                 targetSRPVersion = AssetUtils.GetURPVersion();
             }
-            else if (AssetUtils.IsOnHDRP())
+            else if (_isOnHDRP)
             {
-                targetSRP = "hdrp";
-                targetSRPAlt = "hd rp";
                 targetSRPVersion = AssetUtils.GetHDRPVersion();
             }
             else
             {
                 return;
             }
-            if (string.IsNullOrWhiteSpace(targetSRPAlt)) targetSRPAlt = targetSRP;
 
             if (info.SRPSupportPackage == null)
             {
-                // check if there is a URP sub-package available, heuristic by name (some names are like URP-15, URP-16)
-                // check first with version number supplied in case there are numerated packages
-                List<Asset> srpCandidates = DBAdapter.DB.Query<Asset>("select * from Asset where ParentId=? and Exclude=0 and "
-                    + $"(SafeName like '%{targetSRP}%' or SafeName like '%{targetSRPAlt}%' or DisplayName like '%{targetSRP}%' or DisplayName like '%{targetSRPAlt}%') "
+                // Query sub-packages by render pipeline compatibility flags
+                string compatibilityField = _isOnURP ? "URPCompatible" : "HDRPCompatible";
+
+                // Check first with version number supplied in case there are versioned packages
+                List<Asset> srpCandidates = DBAdapter.DB.Query<Asset>($"select * from Asset where ParentId=? and Exclude=0 and {compatibilityField}=1 "
                     + (targetSRPVersion != null ? $" and (SafeName like '%{targetSRPVersion}%' or DisplayName like '%{targetSRPVersion}%')" : "")
                     + " order by SafeName", info.AssetId);
 
-                // if nothing was found again without version
+                // if nothing was found, try again without version
                 if (srpCandidates.Count == 0)
                 {
-                    srpCandidates = DBAdapter.DB.Query<Asset>("select * from Asset where ParentId=? and Exclude=0 and "
-                        + $"(SafeName like '%{targetSRP}%' or SafeName like '%{targetSRPAlt}%' or DisplayName like '%{targetSRP}%' or DisplayName like '%{targetSRPAlt}%') order by SafeName", info.AssetId);
+                    srpCandidates = DBAdapter.DB.Query<Asset>($"select * from Asset where ParentId=? and Exclude=0 and {compatibilityField}=1 order by SafeName", info.AssetId);
                 }
                 if (srpCandidates.Count == 0) return;
 

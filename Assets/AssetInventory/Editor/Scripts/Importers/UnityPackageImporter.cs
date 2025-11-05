@@ -14,7 +14,6 @@ using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp;
 #endif
 #endif
-using UnityEditor;
 using UnityEngine;
 
 namespace AssetInventory
@@ -95,11 +94,14 @@ namespace AssetInventory
             {
                 // package inherits nearly everything from parent
                 asset.CopyFrom(parent);
+
                 asset.ForeignId = 0; // will otherwise override metadata when syncing with store
                 asset.ParentId = parent.Id;
                 if (asset.AssetSource != Asset.Source.AssetStorePackage) asset.AssetSource = Asset.Source.CustomPackage;
                 asset.SafeName = Path.GetFileNameWithoutExtension(package);
                 asset.DisplayName = StringUtils.CamelCaseToWords(asset.SafeName.Replace("_", " ")).Trim();
+
+                SetHeuristicPipelineCompatibility(asset);
 
                 relPackage = $"{parent.Location}{Asset.SUB_PATH}{subPackage.Path}";
                 asset.SetLocation(relPackage);
@@ -167,6 +169,7 @@ namespace AssetInventory
             if (parent != null)
             {
                 asset.LastRelease = parent.LastRelease;
+                asset.LastUpdate = parent.LastUpdate;
             }
             else
             {
@@ -179,6 +182,14 @@ namespace AssetInventory
             ApplyOverrides(asset);
 
             return asset;
+        }
+
+        public static void SetHeuristicPipelineCompatibility(Asset asset)
+        {
+            // reset pipelines and determine dynamically
+            asset.BIRPCompatible = AssetUtils.ShouldBeBIRPCompatible(asset.SafeName);
+            asset.URPCompatible = AssetUtils.ShouldBeURPCompatible(asset.SafeName);
+            asset.HDRPCompatible = AssetUtils.ShouldBeHDRPCompatible(asset.SafeName);
         }
 
         public static bool TryParseSyntyFilename(string filename, out string group, out string name, out string minVersion, out string version)
@@ -277,7 +288,7 @@ namespace AssetInventory
                 if (CancellationRequested) break;
                 if (!AI.Config.indexSubPackages && assets[i].ParentId > 0) continue;
 
-                SetProgress(IOUtils.GetFileName(assets[i].GetLocation(true)) + " (" + EditorUtility.FormatBytes(assets[i].PackageSize) + ")", i + 1);
+                SetProgress(IOUtils.GetFileName(assets[i].GetLocation(true)) + " (" + StringUtils.FormatBytes(assets[i].PackageSize) + ")", i + 1);
 
                 bool wasCachedAlready = await IndexPackage(assets[i], ProgressId);
                 await Task.Yield(); // let editor breath
@@ -334,7 +345,8 @@ namespace AssetInventory
 
             // TODO: gather old index before to delete orphans afterwards but keep IDs of existing entries stable for tags etc.
 
-            string assetPreviewFile = Path.Combine(tempPath, ".icon.png");
+            string assetPreviewFile = asset.GetLocation(true) + ".icon.png"; // alternatively allow placing png files next to the package
+            if (!File.Exists(assetPreviewFile)) assetPreviewFile = Path.Combine(tempPath, ".icon.png");
             if (File.Exists(assetPreviewFile))
             {
                 string targetDir = Path.Combine(previewPath, asset.Id.ToString());
@@ -450,7 +462,7 @@ namespace AssetInventory
                         if (AI.Config.verifyPreviews
                             && (af.PreviewState == AssetFile.PreviewOptions.Provided || af.PreviewState == AssetFile.PreviewOptions.Custom)
                             && (AI.IsFileType(fileName, AI.AssetGroup.Models) || AI.IsFileType(fileName, AI.AssetGroup.Prefabs) || AI.IsFileType(fileName, AI.AssetGroup.Materials))
-                        )
+                           )
                         {
 #if UNITY_EDITOR_WIN && NET_4_6
                             using (Bitmap image = new Bitmap(IOUtils.ToLongPath(previewFile)))

@@ -18,7 +18,9 @@ namespace AssetInventory
 {
     public static partial class ImageUtils
     {
-        public static readonly List<string> SYSTEM_IMAGE_TYPES = new List<string> {"jpg", "jpeg", "png", "bmp", "gif", "tiff", "tif"
+        public static readonly List<string> SYSTEM_IMAGE_TYPES = new List<string>
+        {
+            "jpg", "jpeg", "png", "bmp", "gif", "tiff", "tif"
 #if UNITY_2021_2_OR_NEWER && !UNITY_EDITOR_WIN
             , "tga", "webp"
 #endif
@@ -60,7 +62,7 @@ namespace AssetInventory
             FromHex("#51e113"),
             FromHex("#08fdcc")
         };
-        
+
         public static Texture2D Resize(this Texture2D source, int size)
         {
             int targetX = size;
@@ -98,7 +100,85 @@ namespace AssetInventory
 
             return tex;
         }
-        
+
+        public static Texture2D WithRoundedCorners(this Texture2D src, int radius)
+        {
+            if (src == null) return null;
+            if (radius <= 0) return src;
+
+            Texture2D readable = src;
+            bool createdTemporary = false;
+            
+            if (!src.isReadable)
+            {
+                readable = src.MakeReadable();
+                createdTemporary = true;
+            }
+
+            try
+            {
+                int width = readable.width;
+                int height = readable.height;
+                int r = Mathf.Clamp(radius, 1, Mathf.Min(width, height) / 2);
+                int r2 = r * r;
+
+                Texture2D result = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                result.filterMode = readable.filterMode;
+                result.wrapMode = TextureWrapMode.Clamp;
+                result.hideFlags = readable.hideFlags;
+
+                Color32[] pixels = readable.GetPixels32();
+                Color32[] outPixels = new Color32[pixels.Length];
+
+                // copy all first
+                Array.Copy(pixels, outPixels, pixels.Length);
+
+                // helper to clear outside a quarter circle
+                void ClearCorner(int startX, int startY, int cx, int cy)
+                {
+                    for (int y = 0; y < r; y++)
+                    {
+                        int py = startY + y;
+                        int dy = py - cy;
+                        for (int x = 0; x < r; x++)
+                        {
+                            int px = startX + x;
+                            int dx = px - cx;
+                            if (dx * dx + dy * dy > r2)
+                            {
+                                int idx = py * width + px;
+                                Color32 c = outPixels[idx];
+                                c.a = 0;
+                                outPixels[idx] = c;
+                            }
+                        }
+                    }
+                }
+
+                // top-left
+                ClearCorner(0, height - r, r - 1, height - r);
+                // top-right
+                ClearCorner(width - r, height - r, width - r, height - r);
+                // bottom-left
+                ClearCorner(0, 0, r - 1, r - 1);
+                // bottom-right
+                ClearCorner(width - r, 0, width - r, r - 1);
+
+                result.SetPixels32(outPixels);
+                result.Apply();
+
+                return result;
+            }
+            finally
+            {
+                // Dispose of the temporary texture if we created one
+                if (createdTemporary)
+                {
+                    UnityEngine.Object.DestroyImmediate(readable);
+                }
+            }
+        }
+
         public static int HammingDistance(ulong a, ulong b)
         {
             ulong v = a ^ b;
@@ -122,23 +202,25 @@ namespace AssetInventory
 
         public static Color GetNearestColor(Color inputColor)
         {
-            double inputRed = Convert.ToDouble(inputColor.r);
-            double inputGreen = Convert.ToDouble(inputColor.g);
-            double inputBlue = Convert.ToDouble(inputColor.b);
+            float inputRed = inputColor.r;
+            float inputGreen = inputColor.g;
+            float inputBlue = inputColor.b;
 
             Color nearestColor = Color.clear;
-            double distance = 500.0;
+            float minDistanceSq = float.MaxValue;
+            
             foreach (Color color in PALETTE_32)
             {
-                // Compute Euclidean distance between the two colors
-                double testRed = Math.Pow(Convert.ToDouble(color.r) - inputRed, 2.0);
-                double testGreen = Math.Pow(Convert.ToDouble(color.g) - inputGreen, 2.0);
-                double testBlue = Math.Pow(Convert.ToDouble(color.b) - inputBlue, 2.0);
-                double tempDistance = Math.Sqrt(testBlue + testGreen + testRed);
-                if (tempDistance == 0.0) return color;
-                if (tempDistance < distance)
+                // Compute squared Euclidean distance (no sqrt needed for comparison)
+                float dr = color.r - inputRed;
+                float dg = color.g - inputGreen;
+                float db = color.b - inputBlue;
+                float distanceSq = dr * dr + dg * dg + db * db;
+                
+                if (distanceSq < 0.0001f) return color; // essentially zero distance
+                if (distanceSq < minDistanceSq)
                 {
-                    distance = tempDistance;
+                    minDistanceSq = distanceSq;
                     nearestColor = color;
                 }
             }
@@ -210,14 +292,16 @@ namespace AssetInventory
 
         public static Texture FillTexture(this Texture2D texture, Color color)
         {
-            Color[] pixels = texture.GetPixels();
+            Color32 color32 = color;
+            int pixelCount = texture.width * texture.height;
+            Color32[] pixels = new Color32[pixelCount];
 
-            for (int i = 0; i < pixels.Length; ++i)
+            for (int i = 0; i < pixelCount; i++)
             {
-                pixels[i] = color;
+                pixels[i] = color32;
             }
 
-            texture.SetPixels(pixels);
+            texture.SetPixels32(pixels);
             texture.Apply();
 
             return texture;
@@ -233,7 +317,7 @@ namespace AssetInventory
                 string ext = extOverride != null ? extOverride : Path.GetExtension(file).ToLowerInvariant();
                 if (ext == ".png")
                 {
-                    using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read))
+                    using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
                     {
                         // PNG header: 8 bytes signature, 4 bytes length, 4 bytes "IHDR"
                         // Then the IHDR chunk: width (4 bytes, big-endian) and height (4 bytes, big-endian)
@@ -249,7 +333,7 @@ namespace AssetInventory
                 }
                 else if (ext == ".jpg" || ext == ".jpeg")
                 {
-                    using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read))
+                    using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
                     {
                         // Validate JPEG SOI marker (0xFFD8)
                         if (fs.ReadByte() != 0xFF || fs.ReadByte() != 0xD8)

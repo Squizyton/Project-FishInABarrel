@@ -905,7 +905,7 @@ namespace AssetInventory
                             {
                                 GUILayout.BeginHorizontal();
                                 EditorGUILayout.LabelField(UIStyles.Content("In-Memory Results", "Maximum number of results to show when high-speed mode is active. The higher this value the more results you can browse but the more memory will also be consumed."), EditorStyles.boldLabel, GUILayout.Width(width));
-                                AI.Config.maxInMemoryResults = EditorGUILayout.DelayedIntField(AI.Config.maxInMemoryResults);
+                                AI.Config.maxInMemoryResults = EditorGUILayout.DelayedIntField(AI.Config.maxInMemoryResults, GUILayout.Width(80));
                                 GUILayout.EndHorizontal();
                             }
 
@@ -957,7 +957,13 @@ namespace AssetInventory
                                 EditorGUILayout.LabelField(UIStyles.Content("Sub-Packages", "Will search through sub-packages as well if a filter is set for a specific package."), EditorStyles.boldLabel, GUILayout.Width(width));
                                 AI.Config.searchSubPackages = EditorGUILayout.Toggle(AI.Config.searchSubPackages);
                                 GUILayout.EndHorizontal();
+
+                                GUILayout.BeginHorizontal();
+                                EditorGUILayout.LabelField(UIStyles.Content("Exclude Wrong SRPs", "Automatically exclude packages that don't match the current render pipeline (URP/HDRP) based on package name keywords."), EditorStyles.boldLabel, GUILayout.Width(width));
+                                AI.Config.excludeIncompatibleSRPs = EditorGUILayout.Toggle(AI.Config.excludeIncompatibleSRPs);
+                                GUILayout.EndHorizontal();
                             }
+
                             if (EditorGUI.EndChangeCheck())
                             {
                                 dirty = true;
@@ -993,17 +999,6 @@ namespace AssetInventory
 
                             EditorGUI.BeginChangeCheck();
                             GUILayout.BeginHorizontal();
-                            EditorGUILayout.LabelField(UIStyles.Content("Group Lists", "Add a second level hierarchy to dropdowns if they become too long to scroll."), EditorStyles.boldLabel, GUILayout.Width(width));
-                            AI.Config.groupLists = EditorGUILayout.Toggle(AI.Config.groupLists);
-                            GUILayout.EndHorizontal();
-                            if (EditorGUI.EndChangeCheck())
-                            {
-                                AI.SaveConfig();
-                                ReloadLookups();
-                            }
-
-                            EditorGUI.BeginChangeCheck();
-                            GUILayout.BeginHorizontal();
                             EditorGUILayout.LabelField(UIStyles.Content("On Double-Click", "Define what should happen when double-clicking on search results."), EditorStyles.boldLabel, GUILayout.Width(width));
                             AI.Config.doubleClickAction = EditorGUILayout.Popup(AI.Config.doubleClickAction, _doubleClickOptions);
                             GUILayout.EndHorizontal();
@@ -1036,6 +1031,18 @@ namespace AssetInventory
                             {
                                 EditorGUILayout.Space();
                                 EditorGUILayout.LabelField("UI", EditorStyles.largeLabel);
+
+                                EditorGUI.BeginChangeCheck();
+                                GUILayout.BeginHorizontal();
+                                EditorGUILayout.LabelField(UIStyles.Content("Group Lists", "Add a second level hierarchy to dropdowns if they become too long to scroll."), EditorStyles.boldLabel, GUILayout.Width(width));
+                                AI.Config.groupLists = EditorGUILayout.Toggle(AI.Config.groupLists);
+                                GUILayout.EndHorizontal();
+                                if (EditorGUI.EndChangeCheck())
+                                {
+                                    AI.SaveConfig();
+                                    ReloadLookups();
+                                }
+
                                 EditorGUI.BeginChangeCheck();
                                 GUILayout.BeginHorizontal();
                                 EditorGUILayout.LabelField(UIStyles.Content("Tile Aspect Ratio", "Adjusts the height of the tiles."), EditorStyles.boldLabel, GUILayout.Width(width));
@@ -1049,6 +1056,18 @@ namespace AssetInventory
                                 if (EditorGUI.EndChangeCheck())
                                 {
                                     _lastTileSizeChange = DateTime.Now;
+                                    AI.SaveConfig();
+                                }
+
+                                EditorGUI.BeginChangeCheck();
+                                GUILayout.BeginHorizontal();
+                                EditorGUILayout.LabelField(UIStyles.Content("Tile Corner Radius", "Roundness of corners of tiles."), EditorStyles.boldLabel, GUILayout.Width(width));
+                                AI.Config.tileCornerRadius = EditorGUILayout.DelayedIntField(AI.Config.tileCornerRadius, GUILayout.Width(50));
+                                EditorGUILayout.LabelField("px", EditorStyles.miniLabel, GUILayout.Width(50));
+                                GUILayout.EndHorizontal();
+                                if (EditorGUI.EndChangeCheck())
+                                {
+                                    dirty = true;
                                     AI.SaveConfig();
                                 }
                             }
@@ -1089,7 +1108,7 @@ namespace AssetInventory
                                     if (!string.IsNullOrWhiteSpace(_selectedEntry.FileStatus)) UIBlock("asset.status", () => GUILabelWithText("Status", $"{_selectedEntry.FileStatus}"));
                                     UIBlock("asset.size", () => GUILabelWithText("Size", EditorUtility.FormatBytes(_selectedEntry.Size)));
                                     if (_selectedEntry.Width > 0) UIBlock("asset.dimensions", () => GUILabelWithText("Dimensions", $"{_selectedEntry.Width}x{_selectedEntry.Height} px"));
-                                    if (_selectedEntry.Length > 0) UIBlock("asset.length", () => GUILabelWithText("Length", $"{_selectedEntry.Length:N2} seconds"));
+                                    if (_selectedEntry.Length > 0) UIBlock("asset.length", () => GUILabelWithText("Length", $"{StringUtils.FormatDuration(_selectedEntry.Length)}"));
                                     if (ShowAdvanced() || _selectedEntry.InProject) GUILabelWithText("In Project", _selectedEntry.InProject ? "Yes" : "No");
                                     if (_selectedEntry.IsDownloaded || _selectedEntry.IsMaterialized)
                                     {
@@ -1163,16 +1182,6 @@ namespace AssetInventory
                                             {
                                                 EditorGUILayout.Space();
 
-                                                if (AssetUtils.IsPrefab(_selectedEntry.FileName))
-                                                {
-                                                    EditorGUI.BeginDisabledGroup(_blockingInProgress);
-                                                    if (UIStyles.MainButton(ref mainUsed, "Add to Scene"))
-                                                    {
-                                                        _ = PerformCopyTo(_selectedEntry, _importFolder, false, true);
-                                                    }
-                                                    EditorGUI.EndDisabledGroup();
-                                                }
-
                                                 if (ShowAdvanced())
                                                 {
                                                     EditorGUI.BeginDisabledGroup(_blockingInProgress);
@@ -1180,9 +1189,24 @@ namespace AssetInventory
                                                     {
                                                         string command = _selectedEntry.InProject ? "Reimport" : "Import";
                                                         GUILabelWithText($"{command} To", _importFolder, 95, null, true);
+
                                                         if (needsDependencyScan)
                                                         {
                                                             EditorGUILayout.LabelField("Dependency scan needed to determine additional import options.", UIStyles.centeredGreyWrappedMiniLabel);
+                                                        }
+
+                                                        if (AssetUtils.IsPrefab(_selectedEntry.FileName))
+                                                        {
+                                                            EditorGUI.BeginDisabledGroup(_blockingInProgress);
+                                                            if (UIStyles.MainButton(ref mainUsed, "Add to Scene"))
+                                                            {
+                                                                _ = PerformCopyTo(_selectedEntry, _importFolder, false, true);
+                                                            }
+                                                            EditorGUI.EndDisabledGroup();
+                                                        }
+
+                                                        if (needsDependencyScan)
+                                                        {
                                                             EditorGUI.BeginDisabledGroup(_blockingInProgress);
                                                             if (UIStyles.MainButton(ref mainUsed, "Import"))
                                                             {
@@ -1217,6 +1241,16 @@ namespace AssetInventory
                                                 }
                                                 else
                                                 {
+                                                    if (AssetUtils.IsPrefab(_selectedEntry.FileName))
+                                                    {
+                                                        EditorGUI.BeginDisabledGroup(_blockingInProgress);
+                                                        if (UIStyles.MainButton(ref mainUsed, "Add to Scene"))
+                                                        {
+                                                            _ = PerformCopyTo(_selectedEntry, _importFolder, false, true);
+                                                        }
+                                                        EditorGUI.EndDisabledGroup();
+                                                    }
+
                                                     if (!_selectedEntry.InProject)
                                                     {
                                                         EditorGUI.BeginDisabledGroup(_blockingInProgress);
@@ -1666,7 +1700,7 @@ namespace AssetInventory
                                 EditorGUILayout.LabelField("Width", EditorStyles.boldLabel, GUILayout.Width(labelWidth));
                                 if (GUILayout.Button(_checkMaxWidth ? "<=" : ">=", GUILayout.Width(25))) _checkMaxWidth = !_checkMaxWidth;
                                 _searchWidth = EditorGUILayout.DelayedTextField(_searchWidth, GUILayout.Width(58));
-                                EditorGUILayout.LabelField("px", EditorStyles.miniLabel);
+                                EditorGUILayout.LabelField("px", EditorStyles.miniLabel, GUILayout.Width(50));
                                 GUILayout.EndHorizontal();
                             }
 
@@ -1676,7 +1710,7 @@ namespace AssetInventory
                                 EditorGUILayout.LabelField("Height", EditorStyles.boldLabel, GUILayout.Width(labelWidth));
                                 if (GUILayout.Button(_checkMaxHeight ? "<=" : ">=", GUILayout.Width(25))) _checkMaxHeight = !_checkMaxHeight;
                                 _searchHeight = EditorGUILayout.DelayedTextField(_searchHeight, GUILayout.Width(58));
-                                EditorGUILayout.LabelField("px", EditorStyles.miniLabel);
+                                EditorGUILayout.LabelField("px", EditorStyles.miniLabel, GUILayout.Width(50));
                                 GUILayout.EndHorizontal();
                             }
 
@@ -1686,7 +1720,7 @@ namespace AssetInventory
                                 EditorGUILayout.LabelField("Length", EditorStyles.boldLabel, GUILayout.Width(labelWidth));
                                 if (GUILayout.Button(_checkMaxLength ? "<=" : ">=", GUILayout.Width(25))) _checkMaxLength = !_checkMaxLength;
                                 _searchLength = EditorGUILayout.DelayedTextField(_searchLength, GUILayout.Width(58));
-                                EditorGUILayout.LabelField("sec", EditorStyles.miniLabel);
+                                EditorGUILayout.LabelField("sec", EditorStyles.miniLabel, GUILayout.Width(50));
                                 GUILayout.EndHorizontal();
                             }
 
@@ -1694,7 +1728,7 @@ namespace AssetInventory
                             EditorGUILayout.LabelField(UIStyles.Content("File Size", "File size in kilobytes"), EditorStyles.boldLabel, GUILayout.Width(labelWidth));
                             if (GUILayout.Button(_checkMaxSize ? "<=" : ">=", GUILayout.Width(25))) _checkMaxSize = !_checkMaxSize;
                             _searchSize = EditorGUILayout.DelayedTextField(_searchSize, GUILayout.Width(58));
-                            EditorGUILayout.LabelField("kb", EditorStyles.miniLabel);
+                            EditorGUILayout.LabelField("kb", EditorStyles.miniLabel, GUILayout.Width(50));
                             GUILayout.EndHorizontal();
 
                             if (AI.Actions.ExtractColors)
@@ -1955,7 +1989,7 @@ namespace AssetInventory
                         if (info.PackageDownloader.IsDownloadSupported())
                         {
                             _curOperation = $"Downloading {info.GetDisplayName()}...";
-                            info.PackageDownloader.Download();
+                            info.PackageDownloader.Download(true);
                             do
                             {
                                 await Task.Delay(200);
@@ -2501,6 +2535,7 @@ namespace AssetInventory
                 SelectedColor = _selectedColor,
                 SelectedImageType = _selectedImageType,
                 ImageTypeOptions = _imageTypeOptions,
+                SelectedPreviewFilter = AI.Config.previewVisibility,
                 RawSearchType = GetRawSearchType(),
                 IgnoreExcludedExtensions = ignoreExcludedExtensions,
                 CurrentPage = _curPage,
@@ -2532,6 +2567,7 @@ namespace AssetInventory
         private void StopSearchPreviewLoading()
         {
             _textureLoading?.Cancel();
+            _textureLoading?.Dispose();
             _textureLoading = new CancellationTokenSource();
         }
 
@@ -2666,7 +2702,18 @@ namespace AssetInventory
             }
             else if (SGrid.contents.Length > idx)
             {
-                SGrid.contents[idx].image = texture;
+                if (AI.Config.tileCornerRadius > 0)
+                {
+                    Texture2D roundedTexture = texture.WithRoundedCorners(AI.Config.tileCornerRadius);
+                    SGrid.contents[idx].image = roundedTexture;
+
+                    // Dispose of the original texture since we only need the rounded version
+                    UnityEngine.Object.DestroyImmediate(texture);
+                }
+                else
+                {
+                    SGrid.contents[idx].image = texture;
+                }
             }
         }
 
@@ -2682,13 +2729,13 @@ namespace AssetInventory
             _assetFileAMCollectionCount = SGrid.selectionItems.Count(info => info.AssetSource == Asset.Source.AssetManager && !string.IsNullOrEmpty(info.Location));
         }
 
-        private void OpenInSearch(AssetInfo info, bool force = false, bool showFilterTab = true)
+        public void OpenInSearch(AssetInfo info, bool force = false, bool showFilterTab = true, string searchPhrase = null)
         {
-            if (info.Id <= 0) return;
-            if (!force && info.FileCount <= 0) return;
+            if (info != null && info.Id <= 0) return;
+            if (info != null && !force && info.FileCount <= 0) return;
             AssetInfo oldEntry = _selectedEntry;
 
-            if (info.Exclude)
+            if (info != null && info.Exclude)
             {
                 if (!EditorUtility.DisplayDialog("Package is Excluded", "This package is currently excluded from the search. Should it be included again?", "Include Again", "Cancel"))
                 {
@@ -2702,20 +2749,36 @@ namespace AssetInventory
 
             AI.Config.tab = 0;
 
-            // search for exact match first
-            string displayName = info.GetDisplayName().Replace("/", " ");
-            if (info.SafeName == Asset.NONE)
+            // Set asset filter if info is provided
+            if (info != null)
             {
-                _selectedAsset = 1;
+                // search for exact match first
+                string displayName = info.GetDisplayName().Replace("/", " ");
+                if (info.SafeName == Asset.NONE)
+                {
+                    _selectedAsset = 1;
+                }
+                else
+                {
+                    _selectedAsset = Array.IndexOf(_assetNames, _assetNames.FirstOrDefault(a => a == displayName + $" [{info.AssetId}]"));
+                }
+                if (_selectedAsset < 0) _selectedAsset = Array.IndexOf(_assetNames, _assetNames.FirstOrDefault(a => a == displayName.Substring(0, 1) + "/" + displayName + $" [{info.AssetId}]"));
+                if (_selectedAsset < 0) _selectedAsset = Array.IndexOf(_assetNames, _assetNames.FirstOrDefault(a => a.EndsWith(displayName + $" [{info.AssetId}]")));
+
+                if (info.AssetSource == Asset.Source.RegistryPackage && _selectedPackageTypes == 1) _selectedPackageTypes = 0;
             }
             else
             {
-                _selectedAsset = Array.IndexOf(_assetNames, _assetNames.FirstOrDefault(a => a == displayName + $" [{info.AssetId}]"));
+                // No asset filter - search all packages
+                _selectedAsset = 0;
             }
-            if (_selectedAsset < 0) _selectedAsset = Array.IndexOf(_assetNames, _assetNames.FirstOrDefault(a => a == displayName.Substring(0, 1) + "/" + displayName + $" [{info.AssetId}]"));
-            if (_selectedAsset < 0) _selectedAsset = Array.IndexOf(_assetNames, _assetNames.FirstOrDefault(a => a.EndsWith(displayName + $" [{info.AssetId}]")));
 
-            if (info.AssetSource == Asset.Source.RegistryPackage && _selectedPackageTypes == 1) _selectedPackageTypes = 0;
+            // Set custom search phrase if provided
+            if (!string.IsNullOrEmpty(searchPhrase))
+            {
+                _searchPhrase = searchPhrase;
+            }
+
             _curPage = 1;
             if (showFilterTab) _searchInspectorTab = 1;
             PerformSearch(); // search immediately as "search automatically" setting might be off 

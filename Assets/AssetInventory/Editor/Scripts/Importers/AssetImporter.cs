@@ -18,6 +18,8 @@ namespace AssetInventory
 
             // check if metadata is already available for triggering and monitoring
             if (string.IsNullOrWhiteSpace(info.OriginalLocation)) return false;
+            if (info.CurrentSubState == Asset.SubState.Outdated) return false;
+            if (info.IsAbandoned) return false;
 
             // skip if too large or unknown download size yet
             if (AI.Config.limitAutoDownloads && (info.PackageSize == 0 || Mathf.RoundToInt(info.PackageSize / 1024f / 1024f) >= AI.Config.downloadLimit)) return false;
@@ -32,9 +34,41 @@ namespace AssetInventory
         {
             string oldMain = CurrentMain;
 
+            // Ensure PackageDownloader is attached
+            if (info.PackageDownloader == null)
+            {
+                AI.GetObserver().Attach(info);
+                if (info.PackageDownloader == null)
+                {
+                    Debug.LogError($"Failed to attach PackageDownloader for '{info.GetDisplayName()}'. Cannot proceed with download.");
+                    yield break;
+                }
+            }
+
+            // Verify download is supported
+            if (!info.PackageDownloader.IsDownloadSupported())
+            {
+                Debug.LogError($"Download not supported for '{info.GetDisplayName()}'.");
+                yield break;
+            }
+
             // refresh in case parallel download has finished by now
             info.Refresh();
-            info.PackageDownloader.RefreshState();
+
+            // Refresh state with error handling (outside try-catch to avoid yield issues)
+            bool refreshFailed = false;
+            try
+            {
+                info.PackageDownloader.RefreshState();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Failed to refresh download state for '{info.GetDisplayName()}': {e.Message}");
+                refreshFailed = true;
+            }
+
+            if (refreshFailed) yield break;
+
             if (info.IsDownloading() || !info.IsDownloaded)
             {
                 CurrentMain = $"Downloading {info.GetDisplayName()}";
@@ -42,24 +76,62 @@ namespace AssetInventory
                 SubCount = 0;
                 SubProgress = 0;
 
-                if (!info.IsDownloading()) info.PackageDownloader.Download();
+                // Start download only if not already downloading (avoid race condition)
+                bool shouldStartDownload = !info.IsDownloading();
+                bool downloadStartFailed = false;
+
+                if (shouldStartDownload)
+                {
+                    try
+                    {
+                        info.PackageDownloader.Download(true);
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"Failed to start download for '{info.GetDisplayName()}': {e.Message}. Check if ThreadUtils is initialized and you're on the main thread.");
+                        downloadStartFailed = true;
+                    }
+
+                    if (downloadStartFailed) yield break;
+
+                    // Give download a moment to start before checking state
+                    yield return null;
+                }
+
                 do
                 {
                     if (CancellationRequested) break; // download will finish in that case and not be removed
 
-                    AssetDownloadState state = info.PackageDownloader.GetState();
-                    SubCount = Mathf.RoundToInt(state.bytesTotal / 1024f / 1024f);
-                    SubProgress = Mathf.RoundToInt(state.bytesDownloaded / 1024f / 1024f);
-                    if (SubCount == 0) SubCount = SubProgress; // in case total size was not available yet
+                    // Update progress with error handling
+                    try
+                    {
+                        AssetDownloadState state = info.PackageDownloader.GetState();
+                        SubCount = Mathf.RoundToInt(state.bytesTotal / 1024f / 1024f);
+                        SubProgress = Mathf.RoundToInt(state.bytesDownloaded / 1024f / 1024f);
+                        if (SubCount == 0) SubCount = SubProgress; // in case total size was not available yet
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogWarning($"Error checking download progress for '{info.GetDisplayName()}': {e.Message}");
+                    }
+
                     yield return null;
                 } while (info.IsDownloading());
             }
             CurrentMain = oldMain;
             if (CancellationRequested) yield break;
 
-            info.SetLocation(info.PackageDownloader.GetAsset().Location);
-            info.Refresh();
-            info.PackageDownloader.RefreshState();
+            // Finalize download with error handling
+            try
+            {
+                info.SetLocation(info.PackageDownloader.GetAsset().Location);
+                info.Refresh();
+                info.PackageDownloader.RefreshState();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Error finalizing download for '{info.GetDisplayName()}': {e.Message}");
+            }
 
             if (!info.IsDownloaded)
             {
@@ -145,6 +217,7 @@ namespace AssetInventory
                     PackageOverrides overrides = JsonConvert.DeserializeObject<PackageOverrides>(File.ReadAllText(overFile));
                     if (overrides != null)
                     {
+                        if (overrides.foreignId > 0) asset.ForeignId = overrides.foreignId;
                         if (!string.IsNullOrWhiteSpace(overrides.displayName)) asset.DisplayName = overrides.displayName;
                         if (!string.IsNullOrWhiteSpace(overrides.displayCategory)) asset.DisplayCategory = overrides.displayCategory;
                         if (!string.IsNullOrWhiteSpace(overrides.safeCategory)) asset.SafeCategory = overrides.safeCategory;

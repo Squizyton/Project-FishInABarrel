@@ -43,8 +43,8 @@ namespace AssetInventory
         public const string AI_ACTION_LOCK = AI.DEFINE_SYMBOL + "_ACTION_LOCK";
 
         private const string AI_ACTION_SETUP_DONE = AI.DEFINE_SYMBOL + "_SETUP_DONE";
-        private const string AI_ACTION_ACTIVE = AI.DEFINE_SYMBOL + "_ACTION_ACTIVE_";
-        private const string AI_CURRENT_STEP = AI.DEFINE_SYMBOL + "_CURRENT_STEP_";
+        internal const string AI_ACTION_ACTIVE = AI.DEFINE_SYMBOL + "_ACTION_ACTIVE_";
+        internal const string AI_CURRENT_STEP = AI.DEFINE_SYMBOL + "_CURRENT_STEP_";
 
         // global cancellation request
         public bool CancellationRequested { get; set; }
@@ -130,6 +130,9 @@ namespace AssetInventory
             ActionSteps.Add(new CopyFileStep());
             ActionSteps.Add(new MoveFileStep());
             ActionSteps.Add(new DeleteFileStep());
+            ActionSteps.Add(new CompressFolderStep());
+            ActionSteps.Add(new ExtractFolderStep());
+
             ActionSteps.Add(new InstallRegistryPackageByNameStep());
             ActionSteps.Add(new InstallRegistryPackageByPathStep());
             ActionSteps.Add(new InstallPackagesByTagStep());
@@ -137,11 +140,16 @@ namespace AssetInventory
             ActionSteps.Add(new UninstallFeatureByNameStep());
             ActionSteps.Add(new UpdateRegistryPackageByNameStep());
             ActionSteps.Add(new TMPStep());
+
+            ActionSteps.Add(new HTMLExportStep());
+            ActionSteps.Add(new FTPUploadStep());
+
             ActionSteps.Add(new SetProjectPropertyStep());
             ActionSteps.Add(new AddDefineSymbolStep());
             ActionSteps.Add(new RemoveDefineSymbolStep());
             ActionSteps.Add(new AddCompilerArgumentStep());
             ActionSteps.Add(new RemoveCompilerArgumentStep());
+
             ActionSteps.Add(new RunActionStep());
             ActionSteps.Add(new RunProcessStep());
             ActionSteps.Add(new DebugLogStep());
@@ -164,9 +172,9 @@ namespace AssetInventory
                 if (startup.Count > 0)
                 {
                     if (EditorUtility.DisplayDialog("Project Setup",
-                            "Asset Inventory was just installed into the project and is about to run the following custom actions which were marked to be run at installation:\n\n"
-                            + string.Join("\n\n", startup.Select(a => "*" + a.Name + "*\n" + a.Description)),
-                            "Run", "Skip"))
+                        "Asset Inventory was just installed into the project and is about to run the following custom actions which were marked to be run at installation:\n\n"
+                        + string.Join("\n\n", startup.Select(a => "*" + a.Name + "*\n" + a.Description)),
+                        "Run", "Skip"))
                     {
                         foreach (CustomAction action in startup)
                         {
@@ -470,87 +478,18 @@ namespace AssetInventory
 
         public async Task RunUserAction(CustomAction ca)
         {
-            // Get steps for this action
-            List<CustomActionStep> steps = DBAdapter.DB.Query<CustomActionStep>("SELECT * FROM CustomActionStep WHERE ActionID = ? order by OrderIdx", ca.Id);
-
-            // Check if we're resuming after a recompilation
-            int lastExecutedStepIndex = EditorPrefs.GetInt(AI_CURRENT_STEP + ca.Id, -1);
-            bool isResuming = EditorPrefs.GetBool(AI_ACTION_ACTIVE + ca.Id, false);
-
-            if (isResuming)
+            UpdateAction action = Actions.FirstOrDefault(a => a.key == ACTION_USER + ca.Id);
+            if (action == null)
             {
-                if (AI.Config.LogCustomActions) Debug.Log($"Resuming custom action '{ca.Name}' after recompilation from step {lastExecutedStepIndex + 1}");
-            }
-            else
-            {
-                // mark that we're starting execution of this action
-                EditorPrefs.SetBool(AI_ACTION_ACTIVE + ca.Id, true);
-                EditorPrefs.SetInt(AI_CURRENT_STEP + ca.Id, -1);
-                if (AI.Config.LogCustomActions) Debug.Log($"Starting fresh execution of custom action '{ca.Name}'");
+                Debug.LogError($"Could not find a registered custom action '{ca.Name}'.");
+                return;
             }
 
-            for (int i = 0; i < steps.Count; i++)
-            {
-                CustomActionStep step = steps[i];
-                step.ResolveValues();
-                if (step.StepDef == null)
-                {
-                    Debug.LogError($"Invalid step definition. Step '{step.Key}' not found. Skipping.");
-                    continue;
-                }
-
-                // skip steps that were already executed before recompilation
-                if (isResuming && i <= lastExecutedStepIndex) continue;
-
-                if (AI.Config.LogCustomActions) Debug.Log($"Executing step {i + 1}/{steps.Count}: {step.StepDef.Name}");
-
-                // validate parameters
-                bool passed = true;
-                for (int j = 0; j < step.StepDef.Parameters.Count; j++)
-                {
-                    StepParameter param = step.StepDef.Parameters[j];
-                    if (param.Optional) continue;
-                    if (
-                        ((step.StepDef.GetParamType(param, step.Values) == StepParameter.ParamType.String || step.StepDef.GetParamType(param, step.Values) == StepParameter.ParamType.MultilineString) && string.IsNullOrWhiteSpace(step.Values[j].stringValue)) ||
-                        (step.StepDef.GetParamType(param, step.Values) == StepParameter.ParamType.Int && step.Values[j].intValue == 0)
-                    )
-                    {
-                        Debug.LogError($"Action step '{step.StepDef.Name}' is missing parameter '{param.Name}'.");
-                        passed = false;
-                    }
-                }
-                if (!passed) continue;
-
-                // execute
-                try
-                {
-                    // Mark this step as executed
-                    EditorPrefs.SetInt(AI_CURRENT_STEP + ca.Id, i);
-
-                    await step.StepDef.Run(step.Values);
-                    AssetDatabase.Refresh();
-
-                    // wait for all processes to finish
-                    while (EditorApplication.isCompiling || EditorApplication.isUpdating)
-                    {
-                        await Task.Delay(25);
-                    }
-                    EditorPrefs.DeleteKey(AI_ACTION_LOCK); // clear lock in case it was set by a step
-
-                    if (AI.Config.LogCustomActions) Debug.Log($"Step {i + 1}/{steps.Count} completed successfully");
-                    if (step.StepDef.InterruptsExecution) return;
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError($"Error executing custom action '{step.StepDef.Name}': {e.Message}");
-                    Debug.LogException(e);
-                }
-            }
-            if (AI.Config.LogCustomActions) Debug.Log($"Custom action '{ca.Name}' completed successfully");
-
-            // clear execution state when done (either completed or failed)
-            EditorPrefs.DeleteKey(AI_ACTION_ACTIVE + ca.Id);
-            EditorPrefs.DeleteKey(AI_CURRENT_STEP + ca.Id);
+            UserActionRunner customAction = new UserActionRunner();
+            customAction.WithProgress($"Running custom action: {ca.Name}");
+            action.progress.Add(customAction);
+            await customAction.Run(ca);
+            customAction.FinishProgress();
         }
 
         public async void Reindex(AssetInfo info)
@@ -609,10 +548,27 @@ namespace AssetInventory
             AssetStoreImporter assetStoreImporter = new AssetStoreImporter();
             assetStoreImporter.WithProgress("Updating package details");
             action?.progress.Add(assetStoreImporter);
-            if (await assetStoreImporter.FetchAssetsDetails(forceUpdate, assetId))
+
+            // set skipEvents if update changed significant data, like version or name
+            if (assetId > 0)
             {
-                // update changed significant data, like version or name
-                skipEvents = false;
+                if (await assetStoreImporter.FetchAssetsDetails(forceUpdate, assetId, forceUpdate)) skipEvents = false;
+            }
+            else
+            {
+                List<Asset> itemsToUpdate = await assetStoreImporter.FetchAssetUpdates(forceUpdate);
+                if (!CancellationRequested)
+                {
+                    if (itemsToUpdate != null)
+                    {
+                        if (await assetStoreImporter.FetchAssetsDetails(itemsToUpdate, true, true)) skipEvents = false;
+                    }
+                    else
+                    {
+                        Debug.Log("New method for fetching asset details did not work, falling back to full scan.");
+                        if (await assetStoreImporter.FetchAssetsDetails(forceUpdate, 0, forceUpdate)) skipEvents = false;
+                    }
+                }
             }
             assetStoreImporter.FinishProgress();
 

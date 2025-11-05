@@ -90,6 +90,7 @@ namespace AssetInventory
         public DateTime PurchaseDate { get; set; }
         public DateTime FirstRelease { get; set; }
         public DateTime LastRelease { get; set; }
+        public DateTime LastUpdate { get; set; } // e.g. deprecation, metadata...
         public float AssetRating { get; set; }
         public int RatingCount { get; set; }
         public float Hotness { get; set; }
@@ -381,7 +382,7 @@ namespace AssetInventory
         public override string ToString()
         {
             string name = string.IsNullOrEmpty(DisplayName) ? SafeName : DisplayName;
-            return $"Package '{name}' ({Location})";
+            return $"Package '{name}' ({OfficialState}, {Location})";
         }
     }
 }

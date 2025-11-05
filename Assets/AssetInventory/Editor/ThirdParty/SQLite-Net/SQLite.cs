@@ -3086,8 +3086,9 @@ namespace SQLite
 			if(Method != MapMethod.ByName)
 				throw new InvalidOperationException($"This {nameof(TableMapping)} is not mapped by name, but {Method}.");
 
-			// RW: remove ToLower() as that was adding thousands of overhead calls
+			// RW: remove ToLower() as that was adding thousands of overhead calls, fallback only if not found
 			var exact = Columns.FirstOrDefault (c => c.Name == columnName);
+			if (exact == null) exact = Columns.FirstOrDefault(c => c.Name.ToLowerInvariant() == columnName.ToLowerInvariant());
 			return exact;
 		}
 

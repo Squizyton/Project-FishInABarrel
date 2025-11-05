@@ -15,7 +15,10 @@ namespace AssetInventory
 
         public static TagsUI ShowWindow()
         {
-            return GetWindow<TagsUI>("Tag Management");
+            TagsUI window = GetWindow<TagsUI>("Tag Management");
+            window.minSize = new Vector2(410, 200);
+            
+            return window;
         }
 
         public void Init()

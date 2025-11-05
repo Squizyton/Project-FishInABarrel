@@ -1,6 +1,8 @@
 ﻿using System.IO;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
+using UnityEngine;
 
 namespace AssetInventory
 {
@@ -36,7 +38,7 @@ namespace AssetInventory
             return _byteLimit;
         }
 
-        public async void StartMonitoring(int scanPeriod)
+        public async Task StartMonitoring(int scanPeriod)
         {
             _isMonitoring = true;
             while (_isMonitoring)
@@ -44,7 +46,7 @@ namespace AssetInventory
                 await Task.Delay(scanPeriod);
                 if (!_isMonitoring) break;
 
-                CheckAndClean();
+                _ = CheckAndClean();
             }
         }
 
@@ -53,7 +55,7 @@ namespace AssetInventory
             _isMonitoring = false;
         }
 
-        public async void CheckAndClean()
+        public async Task CheckAndClean()
         {
             if (IsRunning || !Enabled) return;
             IsRunning = true;
@@ -62,40 +64,41 @@ namespace AssetInventory
                 CurrentSize = await IOUtils.GetFolderSize(_path);
                 if (CurrentSize > _byteLimit)
                 {
-                    string[] subDirs = Directory.GetDirectories(_path);
-                    Array.Sort(subDirs, delegate(string a, string b)
+                    // Create DirectoryInfo objects once and sort by creation time
+                    DirectoryInfo[] subDirs = Directory.GetDirectories(_path)
+                        .Select(d => new DirectoryInfo(d))
+                        .OrderBy(d => d.CreationTime)
+                        .ToArray();
+
+                    foreach (DirectoryInfo dirInfo in subDirs)
                     {
-                        DirectoryInfo aInfo = new DirectoryInfo(a);
-                        DirectoryInfo bInfo = new DirectoryInfo(b);
-                        return aInfo.CreationTime.CompareTo(bInfo.CreationTime);
-                    });
-                    int index = 0;
-                    while (index < subDirs.Length && CurrentSize > _byteLimit)
-                    {
+                        if (CurrentSize <= _byteLimit) break;
+
                         // check if folder is older than 10 minutes to ensure just created folders which might still be in use are not deleted
-                        if (DateTime.Now - Directory.GetCreationTime(subDirs[index]) < TimeSpan.FromMinutes(MIN_ALIVE_TIME))
+                        if (DateTime.Now - dirInfo.CreationTime < TimeSpan.FromMinutes(MIN_ALIVE_TIME))
                         {
-                            index++;
                             continue;
                         }
 
                         if (!Enabled) break;
-                        if (!_validator(subDirs[index]))
+                        if (!_validator(dirInfo.FullName))
                         {
-                            index++;
                             continue;
                         }
 
-                        long subDirSize = await IOUtils.GetFolderSize(subDirs[index]);
+                        long subDirSize = await IOUtils.GetFolderSize(dirInfo.FullName);
 
                         // run non-blocking, no need to wait for deletion
-                        int i = index;
-                        _ = Task.Run(() => IOUtils.DeleteFileOrDirectory(subDirs[i]));
+                        string pathToDelete = dirInfo.FullName;
+                        _ = Task.Run(() => IOUtils.DeleteFileOrDirectory(pathToDelete));
 
                         CurrentSize -= subDirSize;
-                        index++;
                     }
                 }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"Could not run cache limiter successfully: {e.Message}");
             }
             finally
             {

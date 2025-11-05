@@ -143,8 +143,14 @@ namespace AssetInventory
 
         private void RemoveAction(ReorderableList list)
         {
-            int id = int.Parse(AI.Actions.Actions[_selectedUpdateActionIndex].key.Split('-').Last());
+            string key = AI.Actions.Actions[_selectedUpdateActionIndex].key;
+            int id = int.Parse(key.Split('-').Last());
             CustomAction ca = DBAdapter.DB.Find<CustomAction>(id);
+            if (ca == null)
+            {
+                Debug.LogError($"Could not find action to delete: {key}. Restarting Unity might solve this.");
+                return;
+            }
 
             if (!EditorUtility.DisplayDialog("Confirm", $"Do you really want to delete the action '{ca.Name}'?", "Yes", "No")) return;
 
@@ -791,6 +797,12 @@ namespace AssetInventory
                     GUILayout.EndHorizontal();
 
                     GUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField(UIStyles.Content("Wait Time", "Minimum time in seconds to wait for Unity's preview generation before giving up. Lower values speed up indexing but may skip some previews. Unity's preview system can be slow and unreliable."), EditorStyles.boldLabel, GUILayout.Width(labelWidth));
+                    AI.Config.minPreviewWait = EditorGUILayout.DelayedFloatField(AI.Config.minPreviewWait, GUILayout.Width(50));
+                    EditorGUILayout.LabelField("seconds");
+                    GUILayout.EndHorizontal();
+
+                    GUILayout.BeginHorizontal();
                     EditorGUILayout.LabelField(UIStyles.Content("Animation Frames", "Number of frames to create for the preview of animated objects (e.g. videos), evenly spread across the animation. Higher frames require more storage space. Recommended are 3 or 4."), EditorStyles.boldLabel, GUILayout.Width(labelWidth));
                     AI.Config.animationGrid = EditorGUILayout.DelayedIntField(AI.Config.animationGrid, GUILayout.Width(50));
                     EditorGUILayout.LabelField("(will be squared, e.g. 4 = 16 frames)", EditorStyles.miniLabel);
@@ -1182,7 +1194,7 @@ namespace AssetInventory
                     EditorGUI.BeginDisabledGroup(AI.CacheLimiter.IsRunning);
                     if (GUILayout.Button(AI.CacheLimiter.IsRunning ? "Calculating..." : "Run Check", GUILayout.ExpandWidth(false)))
                     {
-                        AI.CacheLimiter.CheckAndClean();
+                        _ = AI.CacheLimiter.CheckAndClean();
                     }
                     if (AI.CacheLimiter.IsRunning && AI.CacheLimiter.CurrentSize > 0)
                     {
@@ -1217,6 +1229,16 @@ namespace AssetInventory
                     AI.CacheLimiter.Enabled = AI.Config.limitCacheSize;
                     AI.CacheLimiter.SetLimit(AI.Config.cacheLimit);
                 }
+
+                EditorGUILayout.Space();
+                GUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("FTP Connections", EditorStyles.boldLabel, GUILayout.Width(labelWidth));
+                if (GUILayout.Button("Configure...", GUILayout.ExpandWidth(false)))
+                {
+                    FTPAdminUI.ShowWindow();
+                }
+                GUILayout.EndHorizontal();
+
                 EndIndentBlock();
             }
             EditorGUILayout.EndFoldoutHeaderGroup();
@@ -1561,6 +1583,8 @@ namespace AssetInventory
                         }
                     }
                 });
+
+                GUILayout.BeginHorizontal();
                 UIBlock("settings.actions.resetconfig", () =>
                 {
                     if (GUILayout.Button(UIStyles.Content("Reset Configuration", "Will reset the configuration to default values, also deleting all Additional Folder configurations.")))
@@ -1574,8 +1598,9 @@ namespace AssetInventory
                     {
                         AI.ResetUICustomization();
                     }
-                    EditorGUILayout.Space();
                 });
+                GUILayout.EndHorizontal();
+                EditorGUILayout.Space();
 
                 EditorGUI.BeginDisabledGroup(_cleanupInProgress);
                 UIBlock("settings.actions.optimizedb", () =>

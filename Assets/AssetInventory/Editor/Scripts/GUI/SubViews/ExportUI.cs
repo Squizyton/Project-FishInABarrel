@@ -75,49 +75,9 @@ namespace AssetInventory
 
         private void LoadTemplates()
         {
-            _templates = new List<TemplateInfo>();
-
-            // can either be under Assets/AssetInventory/Editor/Templates or under the Packages/com.wetzold.asset-inventory/Editor/Templates
-            _templateFolder = GetTemplateRootFolder();
-            IOUtils.GetFiles(_templateFolder, new List<string> {"*.bytes"}, SearchOption.AllDirectories).ForEach(f =>
-            {
-                TemplateInfo ti = new TemplateInfo();
-                ti.path = f;
-
-                // check for existing descriptor, otherwise create on the fly
-                string descriptor = ti.GetDescriptorPath();
-                if (File.Exists(descriptor))
-                {
-                    ti = JsonConvert.DeserializeObject<TemplateInfo>(File.ReadAllText(descriptor));
-                    ti.path = f;
-                    ti.hasDescriptor = true;
-                }
-                else
-                {
-                    ti.date = File.GetCreationTime(f);
-                }
-                if (string.IsNullOrWhiteSpace(ti.name)) ti.name = StringUtils.CamelCaseToWords(ti.GetNameFromFile(f));
-
-                _templates.Add(ti);
-            });
-            _templates = _templates.OrderBy(t => t.isSample).ThenBy(t => t.name, StringComparer.InvariantCultureIgnoreCase).ToList();
-
-            int idx = _templates.FindIndex(t => t.isSample);
-            if (idx > 0)
-            {
-                TemplateInfo tmpTi = new TemplateInfo();
-                tmpTi.name = "";
-                _templates.Insert(idx, tmpTi);
-            }
-
+            _templates = TemplateUtils.LoadTemplates();
+            _templateFolder = TemplateUtils.GetTemplateRootFolder();
             _templateNames = _templates.Select(t => t.name).ToArray();
-        }
-
-        private static string GetTemplateRootFolder()
-        {
-            return AssetDatabase.FindAssets("t:Folder", new[] {"Assets", "Packages"})
-                .Select(AssetDatabase.GUIDToAssetPath)
-                .FirstOrDefault(p => p.Replace("\\", "/").ToLowerInvariant().EndsWith("inventory/editor/templates"));
         }
 #else
         public void OnEnable()
@@ -214,6 +174,7 @@ namespace AssetInventory
                 new ED("Asset/DisplayName", false),
                 new ED("Asset/DisplayPublisher", false),
                 new ED("Asset/FirstRelease", false),
+                new ED("Asset/ForeignId", false),
                 new ED("Asset/HDRPCompatible", false),
                 new ED("Asset/Hotness", false),
                 new ED("Asset/KeyFeatures", false),
@@ -319,7 +280,7 @@ namespace AssetInventory
                 backgroundColor.b * 0.7f
             );
 
-            // Draw border lines (top, right, bottom, left)
+            // Draw borderlines (top, right, bottom, left)
             for (int x = 0; x < width; x++)
             {
                 texture.SetPixel(x, 0, borderColor);
@@ -1122,7 +1083,7 @@ namespace AssetInventory
 
         private void CreateTemplate(string newName)
         {
-            string destination = Path.Combine(GetTemplateRootFolder(), $"{newName}.zip.bytes");
+            string destination = Path.Combine(TemplateUtils.GetTemplateRootFolder(), $"{newName}.zip.bytes");
 
             if (File.Exists(destination))
             {
@@ -1346,7 +1307,7 @@ namespace AssetInventory
                     AI.GetObserver().Attach(info);
                     if (!info.PackageDownloader.IsDownloadSupported()) continue;
 
-                    info.PackageDownloader.Download();
+                    info.PackageDownloader.Download(true);
                     do
                     {
                         await Task.Yield();

@@ -19,6 +19,7 @@ namespace AssetInventory
         private const int LOG_AUDIO_PARSING = 4;
         private const int LOG_PACKAGE_PARSING = 8;
         private const int LOG_CUSTOM_ACTION = 16;
+        private const int LOG_PREVIEW_CREATION = 32;
 
         public int version = UpgradeUtil.CURRENT_CONFIG_VERSION;
         public int searchType;
@@ -47,9 +48,11 @@ namespace AssetInventory
         public bool searchAutomatically = true;
         public bool searchWithoutInput = true;
         public bool searchSubPackages;
+        public bool excludeIncompatibleSRPs = true;
         public bool extractSingleFiles;
         public int previewVisibility;
         public int searchTileSize = 128;
+        public int tileCornerRadius;
         public float searchTileAspectRatio = 1f;
         public float searchDelay = 0.5f;
         public float inMemorySearchDelay = 0.1f;
@@ -59,7 +62,7 @@ namespace AssetInventory
         public bool excludePreviewExtensions;
         public string excludedPreviewExtensions;
         public bool excludeExtensions = true;
-        public string excludedExtensions = "asset;json;txt;cs;md;uss;asmdef;uxml;editorconfig;signature;yml;cginc;gitattributes;release;collabignore;suo";
+        public string excludedExtensions = "asset;json;txt;cs;md;uss;asmdef;uxml;editorconfig;signature;yml;cginc;gitattributes;release;collabignore;suo;ds_store";
         public bool showExtensionsList;
         public bool keepExtractedOnAudio = true;
         public bool disableDragDrop;
@@ -68,12 +71,18 @@ namespace AssetInventory
         public bool wsSearchWithoutInput;
         public bool wsSavedSearchInMemory = true;
 
-        public float rowHeightMultiplier = 1.1f;
+        public int rowHeight = 22;
+        public int rowHeightMedia = 120;
         public int previewChunkSize = 20;
         public int previewSize = 128;
         public int mediaHeight = 350;
+        public bool mediaSameWidth = true;
+        public bool mediaMaintainAspect = true;
+        public int mediaXSpacing = 4;
+        public int mediaYFillRatio = 80;
         public int mediaThumbnailWidth = 120;
         public int mediaThumbnailHeight = 75;
+        public int mediaCornerRadius = 10;
         public bool showOriginalPrice;
         public int currency; // 0 - EUR, 1 - USD, 2 - CYN
         public int packageTileSize = 150;
@@ -127,6 +136,7 @@ namespace AssetInventory
         public bool downloadPackagesForPreviews = true;
         public bool showIconsForMissingPreviews = true;
         public int parallelPreviewBatchSize = 20; // Number of previews to process in parallel (1 = sequential)
+        public float minPreviewWait = 9f; // Minimum time in seconds to wait for Unity preview generation before giving up
         public bool importPackageKeywordsAsTags;
         public string customStorageLocation;
         public bool showCustomPackageUpdates;
@@ -159,12 +169,13 @@ namespace AssetInventory
         public bool useCooldown = true;
         public int cooldownInterval = 20; // minutes
         public int cooldownDuration = 20; // seconds
+        public int purchaseBatchSize = 100;
         public int reportingBatchSize = 500;
         public long memoryLimit = 10 * Size.GB; // every X gigabytes
         public bool limitCacheSize = true;
         public int cacheLimit = 60; // in gigabyte
         public int massOpenWarnThreshold = 7;
-        public int logAreas = LOG_IMAGE_RESIZING | LOG_AUDIO_PARSING | LOG_MEDIA_DOWNLOADS | LOG_PACKAGE_PARSING | LOG_CUSTOM_ACTION;
+        public int logAreas = LOG_IMAGE_RESIZING | LOG_AUDIO_PARSING | LOG_MEDIA_DOWNLOADS | LOG_PACKAGE_PARSING | LOG_CUSTOM_ACTION | LOG_PREVIEW_CREATION;
         public int dbOptimizationPeriod = 30; // days
         public int dbOptimizationReminderPeriod = 1; // days
         public string dbJournalMode = "WAL"; // DELETE is an alternative for better compatibility while WAL is faster
@@ -202,6 +213,7 @@ namespace AssetInventory
         public bool autoRefreshPurchases = true;
         public int purchasesRefreshPeriod = 12; // in hours
         public DateTime lastPurchasesUpdate;
+        public DateTime lastMetadataUpdate;
 
         // non-preferences for convenience
         public int tab;
@@ -215,6 +227,7 @@ namespace AssetInventory
 
         public List<UpdateActionStates> actionStates = new List<UpdateActionStates>();
         public List<FolderSpec> folders = new List<FolderSpec>();
+        public List<FTPConnection> ftpConnections = new List<FTPConnection>();
 
         // log helpers
         public bool LogMediaDownloads => (logAreas & LOG_MEDIA_DOWNLOADS) != 0;
@@ -222,6 +235,7 @@ namespace AssetInventory
         public bool LogAudioParsing => (logAreas & LOG_AUDIO_PARSING) != 0;
         public bool LogPackageParsing => (logAreas & LOG_PACKAGE_PARSING) != 0;
         public bool LogCustomActions => (logAreas & LOG_CUSTOM_ACTION) != 0;
+        public bool LogPreviewCreation => (logAreas & LOG_PREVIEW_CREATION) != 0;
 
         // UI customization
         public List<UISection> uiSections = new List<UISection>();

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Unity.EditorCoroutines.Editor;
 using UnityEngine;
 
 namespace AssetInventory
@@ -30,6 +31,20 @@ namespace AssetInventory
                 )
                 ORDER BY Asset.Id";
             List<AssetInfo> files = DBAdapter.DB.Query<AssetInfo>(query, AssetFile.PreviewOptions.Redo, AssetFile.PreviewOptions.RedoMissing, AssetFile.PreviewOptions.Redo, AssetFile.PreviewOptions.RedoMissing).ToList();
+
+            // filter out packages not for current render pipeline, for BIRP remove all support packages
+            if (AssetUtils.IsOnURP())
+            {
+                files.RemoveAll(item => item.HDRPCompatible && !item.URPCompatible);
+            }
+            else if (AssetUtils.IsOnHDRP())
+            {
+                files.RemoveAll(item => item.URPCompatible && !item.HDRPCompatible);
+            }
+            else
+            {
+                files.RemoveAll(item => (item.URPCompatible || item.HDRPCompatible) && !item.BIRPCompatible);
+            }
 
             return await RecreatePreviews(files, true, allAssets);
         }
@@ -102,23 +117,40 @@ namespace AssetInventory
                 SetProgress(asset.DisplayName, MainProgress);
 
                 // download on demand
-                if (!info.IsDownloaded && !info.IsMaterialized)
+                AssetInfo root = info.GetRoot();
+                if (!root.IsDownloaded && !info.IsMaterialized)
                 {
-                    if (!AI.Config.downloadPackagesForPreviews || !CanDownload(info))
+                    if (!AI.Config.downloadPackagesForPreviews)
                     {
                         Debug.Log($"Could not recreate previews for '{asset}' since the package is not downloaded.");
                         continue;
                     }
-
-                    // ensure package is downloaded
-                    IEnumerator downloader = DownloadAsset(info);
-                    while (downloader.MoveNext())
+                    if (root.CurrentSubState == Asset.SubState.Outdated)
                     {
-                        if (CancellationRequested) break;
-                        await Task.Yield();
+                        Debug.Log($"Cannot download outdated package '{asset}' to recreate previews. Usually such packages can be deleted.");
+                        continue;
                     }
+                    if (!CanDownload(root))
+                    {
+                        Debug.Log($"Cannot download package '{asset}' to recreate previews.");
+                        continue;
+                    }
+
+                    // ensure package is downloaded - use EditorCoroutineUtility to properly execute on main thread
+                    bool downloadDone = false;
+                    EditorCoroutineUtility.StartCoroutineOwnerless(DownloadAssetWrapper(root, () => downloadDone = true));
+
+                    // Wait for download to complete
+                    while (!downloadDone && !CancellationRequested)
+                    {
+                        await Task.Delay(100);
+                    }
+                    await Task.Delay(2000); // grace period for decryption etc.
+
                     if (CancellationRequested) break;
-                    if (!info.IsDownloaded)
+
+                    root.Refresh();
+                    if (!root.IsDownloaded)
                     {
                         Debug.Log($"Could not recreate preview for '{asset}' since the package could not be downloaded.");
                         continue;
@@ -133,17 +165,31 @@ namespace AssetInventory
                 if (!wasCached && autoRemoveCache) RemoveWorkFolder(asset, tempPath);
                 if (wasDownloaded)
                 {
-                    // remove downloaded package if it was not cached
-                    IEnumerator remover = RemoveDownload(asset);
-                    while (remover.MoveNext())
+                    // remove downloaded package if it was not cached - use EditorCoroutineUtility for proper main thread execution
+                    bool removeDone = false;
+                    EditorCoroutineUtility.StartCoroutineOwnerless(RemoveDownloadWrapper(root.ToAsset(), () => removeDone = true));
+
+                    // Wait for removal to complete
+                    while (!removeDone && !CancellationRequested)
                     {
-                        if (CancellationRequested) break;
-                        await Task.Yield();
+                        await Task.Delay(100);
                     }
                 }
             }
 
             return created;
+        }
+
+        private IEnumerator DownloadAssetWrapper(AssetInfo info, Action onComplete)
+        {
+            yield return DownloadAsset(info);
+            onComplete?.Invoke();
+        }
+
+        private IEnumerator RemoveDownloadWrapper(Asset asset, Action onComplete)
+        {
+            yield return RemoveDownload(asset);
+            onComplete?.Invoke();
         }
 
         private async Task<int> RecreatePackagePreviews(List<AssetInfo> files, Action<PreviewRequest> onDone = null)

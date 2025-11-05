@@ -11,7 +11,7 @@ namespace AssetInventoryUsage
     {
         public override void OnInspectorGUI()
         {
-            #if ASSET_INVENTORY
+#if ASSET_INVENTORY
             GUILayout.Label("UI Examples", EditorStyles.boldLabel);
             if (GUILayout.Button("Search for a car..."))
             {
@@ -50,9 +50,28 @@ namespace AssetInventoryUsage
                     Debug.Log(package.DisplayName);
                 }
             }
-            #else
+            if (GUILayout.Button("Search for images less than 256 width"))
+            {
+                AssetSearch.Options searchOptions = new AssetSearch.Options
+                {
+                    SearchPhrase = "flower",
+                    MaxResults = 10,
+                    CurrentPage = 1,
+                    RawSearchType = "Images",
+                    CheckMaxWidth = true,
+                    SearchWidth = "256"
+                };
+
+                AssetSearch.Result result = AssetSearch.Execute(searchOptions);
+                Debug.Log($"<color=cyan>Found {result.ResultCount:N0} image files with width < 256px (showing first {result.Files.Count}):</color>");
+                foreach (AssetInfo file in result.Files)
+                {
+                    Debug.Log($"<color=white>-</color> <color=yellow>{file.FileName}</color> <color=gray>({file.Type})</color> <color=green>{file.Width}x{file.Height}</color> <color=gray>from</color> <color=orange>{file.GetDisplayName()}</color>");
+                }
+            }
+#else
                 EditorGUILayout.HelpBox("This feature is only available if Asset Inventory was imported into this project.", MessageType.Info);
-            #endif
+#endif
         }
     }
 }

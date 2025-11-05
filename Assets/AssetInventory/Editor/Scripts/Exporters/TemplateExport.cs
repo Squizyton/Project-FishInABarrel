@@ -54,7 +54,29 @@ namespace AssetInventory
                     else
                     {
                         asset.Slug = $"../Previews/{asset.AssetId}/a-{asset.AssetId}.png";
+
+                        // in case Previews folder is not inside target folder, copy preview file to output folder
+                        string targetFile = Path.Combine(env.publishFolder, asset.Slug.Substring(3));
+                        if (!File.Exists(targetFile))
+                        {
+                            // copy preview file to output folder
+                            string targetFolder = Path.GetDirectoryName(targetFile);
+                            if (!Directory.Exists(targetFolder)) Directory.CreateDirectory(targetFolder);
+                            File.Copy(file, targetFile, true);
+                        }
                     }
+                }
+
+                // if there is no media, fallback to cover image
+                if (asset.AllMedia.Count == 0)
+                {
+                    AssetMedia media = new AssetMedia
+                    {
+                        Type = "main",
+                        Url = asset.Slug
+                    };
+                    asset.AllMedia.Add(media);
+                    asset.Media.Add(media);
                 }
             });
 
@@ -133,7 +155,7 @@ namespace AssetInventory
             if (!settings.devMode || !settings.preserveJson || packageSize + filesSize == 0)
             {
                 ExportPackageData("packages.json", tempFolder, template);
-                ExportFileData("files.json", tempFolder, template, env);
+                await ExportFileData("files.json", tempFolder, template, env);
             }
             template.hasFilesData = Directory.GetFiles(tempFolder, "files.json", SearchOption.AllDirectories).Length > 0;
 
@@ -302,7 +324,7 @@ namespace AssetInventory
             }
         }
 
-        private void ExportFileData(string fileName, string folder, TemplateInfo template, TemplateExportEnvironment env)
+        private async Task ExportFileData(string fileName, string folder, TemplateInfo template, TemplateExportEnvironment env)
         {
             string[] files = Directory.GetFiles(folder, fileName, SearchOption.AllDirectories);
             if (files.Length == 0) return;
@@ -348,9 +370,23 @@ namespace AssetInventory
                 {
                     jsonWriter.WriteStartArray();
 
-                    foreach (AssetInfo asset in _assets)
+                    foreach (AssetInfo info in _assets)
                     {
-                        List<AssetFile> afs = DBAdapter.DB.Query<AssetFile>("select " + string.Join(",", propertiesToExport) + " from AssetFile where AssetId=? " + excludeImages + " order by Path", asset.AssetId);
+                        List<AssetFile> afs = DBAdapter.DB.Query<AssetFile>("select * from AssetFile where AssetId=? " + excludeImages + " order by Path", info.AssetId);
+
+                        // embed "original" previews again into previews folder since otherwise browsing will not show previews
+                        Asset asset = info.ToAsset();
+                        List<AssetInfo> convertQueue = afs
+                            .Where(af => af.PreviewState == AssetFile.PreviewOptions.UseOriginal)
+                            .Select(af => new AssetInfo().CopyFrom(asset, af))
+                            .ToList();
+                        if (convertQueue.Count > 0)
+                        {
+                            EmbedOriginalPreviewValidator converter = new EmbedOriginalPreviewValidator();
+                            converter.DBIssues = convertQueue;
+                            await converter.Fix();
+                        }
+
                         afs.ForEach(af =>
                         {
                             if (af.Path != null && af.Path.StartsWith("Assets/")) af.Path = af.Path.Substring(7);
@@ -395,7 +431,7 @@ namespace AssetInventory
 
         private static string ProcessTemplate(string root, string templatePath, object model)
         {
-            // Read the template file content.
+            // Read the template file content
             string templateText;
             try
             {
@@ -411,7 +447,7 @@ namespace AssetInventory
             Template template = Template.Parse(templateText);
             if (template.HasErrors)
             {
-                // Log each error and throw an exception.
+                // Log each error and throw an exception
                 foreach (LogMessage message in template.Messages)
                 {
                     Debug.LogError($"Error parsing template '{templatePath}': {message}");
@@ -419,8 +455,8 @@ namespace AssetInventory
                 return null;
             }
 
-            // Create a TemplateContext and assign a FileSystemTemplateLoader.
-            // The FileSystemTemplateLoader is configured with a root directory from which to resolve includes.
+            // Create a TemplateContext and assign a FileSystemTemplateLoader
+            // The FileSystemTemplateLoader is configured with a root directory from which to resolve includes
             TemplateContext context = new TemplateContext
             {
                 TemplateLoader = new FileTemplateLoader(Path.Combine(root, "_templates")),
@@ -442,15 +478,15 @@ namespace AssetInventory
             scriptObject.Import("size2str", new Func<long, string>(EditorUtility.FormatBytes));
             scriptObject.Import("reldate", new Func<DateTime, string>(StringUtils.GetRelativeTimeDifference));
 
-            // Push the model as a global variable into the context.
-            // Now, the template can access model properties directly.
+            // Push the model as a global variable into the context
+            // Now, the template can access model properties directly
             context.PushGlobal(scriptObject);
 
-            // Render the template with the given model.
+            // Render the template with the given model
             string output;
             try
             {
-                // The member name selector simply returns the property name.
+                // The member name selector simply returns the property name
                 output = template.Render(context);
             }
             catch (Exception e)

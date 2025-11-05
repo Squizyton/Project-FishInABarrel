@@ -203,7 +203,7 @@ namespace AssetInventory
 
                 if (!UnityPreviewGenerator.RegisterPreviewRequest(info, sourcePath, previewFile, req =>
                     {
-                        StorePreviewResult(req);
+                        AssetFile af = StorePreviewResult(req);
                         if (req.Icon != null)
                         {
                             onCreated?.Invoke();
@@ -212,9 +212,9 @@ namespace AssetInventory
                         {
                             Debug.LogWarning($"Unity did return a pink preview image for '{info.FileName}' due to the currently incompatible render pipeline. Reverting to previous version.");
                         }
-                        else
+                        else if (af.PreviewState != AssetFile.PreviewOptions.Error) // otherwise error already logged
                         {
-                            Debug.LogWarning($"Unity did not return any preview image for '{info.FileName}'.");
+                            if (AI.Config.LogPreviewCreation) Debug.LogWarning($"Unity did not return any preview image for '{info.FileName}'.");
                         }
                         onDone?.Invoke(req);
                     }, info.InProject || info.Dependencies?.Count > 0))
@@ -233,11 +233,22 @@ namespace AssetInventory
             {
                 if (texture != null)
                 {
+                    try
+                    {
 #if UNITY_2021_2_OR_NEWER
-                    await File.WriteAllBytesAsync(previewFile, texture.EncodeToPNG());
+                        await File.WriteAllBytesAsync(previewFile, texture.EncodeToPNG());
 #else
-                    File.WriteAllBytes(previewFile, texture.EncodeToPNG());
+                        File.WriteAllBytes(previewFile, texture.EncodeToPNG());
 #endif
+                    }
+                    catch (IOException ioEx)
+                    {
+                        Debug.LogError($"Failed to write preview '{previewFile}'. Disk may be full: {ioEx.Message}");
+                        UnityEngine.Object.DestroyImmediate(texture);
+                        if (animTexture != null) UnityEngine.Object.DestroyImmediate(animTexture);
+                        return false;
+                    }
+
                     PreviewRequest req = new PreviewRequest {DestinationFile = previewFile, Id = info.Id, Icon = Texture2D.grayTexture, SourceFile = sourcePath};
                     StorePreviewResult(req);
                     onCreated?.Invoke();
@@ -245,11 +256,18 @@ namespace AssetInventory
 
                     if (animTexture != null)
                     {
+                        try
+                        {
 #if UNITY_2021_2_OR_NEWER
-                        await File.WriteAllBytesAsync(animPreviewFile, animTexture.EncodeToPNG());
+                            await File.WriteAllBytesAsync(animPreviewFile, animTexture.EncodeToPNG());
 #else
-                        File.WriteAllBytes(animPreviewFile, animTexture.EncodeToPNG());
+                            File.WriteAllBytes(animPreviewFile, animTexture.EncodeToPNG());
 #endif
+                        }
+                        catch (IOException ioEx)
+                        {
+                            Debug.LogError($"Failed to write animated preview '{animPreviewFile}'. Disk may be full: {ioEx.Message}");
+                        }
                         UnityEngine.Object.DestroyImmediate(animTexture);
                     }
 
@@ -317,10 +335,10 @@ namespace AssetInventory
             return Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(sourcePath)), "preview.png");
         }
 
-        public static void StorePreviewResult(PreviewRequest req)
+        public static AssetFile StorePreviewResult(PreviewRequest req)
         {
             AssetFile af = DBAdapter.DB.Find<AssetFile>(req.Id);
-            if (af == null) return;
+            if (af == null) return null;
 
             if (!File.Exists(req.DestinationFile))
             {
@@ -329,7 +347,7 @@ namespace AssetInventory
                     af.PreviewState = AssetFile.PreviewOptions.Error;
                     DBAdapter.DB.Update(af);
                 }
-                return;
+                return af;
             }
 
             if (req.Obj != null)
@@ -363,8 +381,14 @@ namespace AssetInventory
                 af.Hue = -1f;
                 af.AICaption = null;
             }
+            else
+            {
+                if (AI.Config.LogPreviewCreation) Debug.LogWarning($"No preview returned for '{req.SourceFile}'");
+            }
 
             DBAdapter.DB.Update(af);
+
+            return af;
         }
     }
 }

@@ -4,6 +4,81 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2025-10-21
+
+- New asset details update method, greatly reducing time needed to fetch updates
+- Automatically update asset details in the background regularly, making sure available updates are showing up quickly
+- Performance
+  - Greatly improve texture memory management
+  - Greatly improve memory consumption and performance of indexing and previewing audio assets by activating streaming
+  - Speed up dependency analysis using render pipeline flags to identify support packages
+  - Dramatic media loading and memory consumption improvements by loading full media only ondemand
+  - Small performance improvements all over
+  - Improve cache limiter performance and error handling
+- Custom Actions
+  - New action steps: Compress Folder, Extract Folder
+  - New action step: Export HTML template
+  - New action step: FTP Upload
+  - Allow Delete Folder action step to also delete folders outside current project
+  - Allow running also predefined actions in Run Action step
+  - Incompatible change: Actions using Run Action need to be resaved
+  - Running custom actions now show progress
+  - Handle custom action deletion issues gracefully
+- HTML Export
+  - Automatically embed original previews back into Previews folder when exporting to HTML
+  - Treat HTML package search the same in grid and list view
+  - Create Previews folder on the fly if missing in HTML export target directory
+  - Fallback to cover image in HTML export if there are no media images available
+  - Align rendering of stars in HTML to be identical in static and dynamic search mode
+  - Show only media in HTML export carousel that is viewable
+  - Fix media carousel not being shown in html export
+  - Fix HTML search always showing "Searching..." when no files are present
+- Previews
+  - Improve downloading during preview pipeline
+  - Allow showing all affected assets for specific preview states directly from preview wizard
+  - Make wait time for Unity previews configurable
+  - Add has-preview filter to search integration and API
+  - Allow deactivating preview error logs
+  - Automatically clean-up corrupted preview files that cannot be loaded from Previews folder
+  - Support custom archive & package preview icons through a png file next to the actual package
+  - Show scheduled previews broken down by types
+  - Allow removing specific types from the preview queue
+  - Confirm preview rescheduling for selected types
+  - Clean preview queue of items that accidentally got in and cannot yield results (script files, documents...)
+  - Skip preview recreation for items in support packages incompatible to the current render pipeline (hdrp packages in an urp package and vice versa)
+  - Fix downloads not working reliably during preview recreation
+- Search
+  - New setting to exclude packages in asset search not matching current SRP (on by default)
+  - New validator: Set correct render pipeline compatibility flags for sub-packages
+  - Improve formatting of durations to cover long audio lengths
+  - Detect more support sub-packages correctly leading to better dependency resolution
+  - API search example
+- Media
+  - Many media column customization options
+  - Use rounded corners for media images and allow setting for search results as well
+  - Remove flickering of media images when selecting items in the packages list
+  - Allow setting corner radius of media images and search previews
+  - Allow copying media URL to clipboard when right clicking external media
+  - Fix media section getting hidden when scrolling selected item out of view with media column visible
+- New management UI under Settings/Locations to configure FTP connections
+- Additional items added to exclusion list which can only be imported into the root (5 total now)
+- Improve package deletion with a dedicated deletion UI
+- Allow excluding extensions also in archives
+- Support foreign Id in override files
+- Improve error logging for downloads
+- Cleanup failed downloads
+- Reduce locking of files by the tool, enabling more concurrent usage
+- Handle insufficient disk space gracefully
+- Set a sensible min size for tag management UI
+- Unity 6.4 compatibility
+- Fallback to legacy asset details refresh if new method does not work (Unity 6.4a)
+- Fix incorrect materialization of dependencies from additional folders during previews creation leading to locked files
+- Fix SQLite not finding columns in case of spelling differences
+- Fix downloader trying to download sub, outdated or abandoned packages
+- Fix download error message spam appearing on Mac
+- Fix seldom file access race condition in copying assets to project
+- Fix parallel calls to dependency analysis resulting in potentially corrupt analysis
+
 ## [3.4.0] - 2025-09-26
 
 - New package list column: Media (showing screenshots of the package right in the table)

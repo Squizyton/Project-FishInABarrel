@@ -31,6 +31,7 @@ namespace AssetInventory
         {
             _validators.Clear();
             _validators.Add(new ScheduledPreviewRecreationValidator());
+            _validators.Add(new SubPackageRenderPipelineValidator());
             _validators.Add(new OutdatedPackagesValidator());
             _validators.Add(new UseOriginalPreviewValidator());
             _validators.Add(new EmbedOriginalPreviewValidator());

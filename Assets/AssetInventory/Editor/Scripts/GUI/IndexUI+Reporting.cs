@@ -224,7 +224,10 @@ namespace AssetInventory
                     if (_pvSelectionChanged || _pvSelectedAssets == null)
                     {
                         _pvSelectedAssets = AssetUtils.Guids2Files(new List<string> {Selection.assetGUIDs[0]}).First().Value;
-                        AssetUtils.LoadTextures(_pvSelectedAssets, new CancellationTokenSource().Token);
+                        _textureLoading3?.Cancel();
+                        _textureLoading3?.Dispose();
+                        _textureLoading3 = new CancellationTokenSource();
+                        AssetUtils.LoadTextures(_pvSelectedAssets, _textureLoading3.Token);
                     }
                     if (_pvSelectedAssets.Count == 0)
                     {
@@ -341,6 +344,7 @@ namespace AssetInventory
             OnReportTreeSelectionChanged(ReportTreeView.GetSelection());
 
             _textureLoading3?.Cancel();
+            _textureLoading3?.Dispose();
             _textureLoading3 = new CancellationTokenSource();
             AssetUtils.LoadTextures(data, _textureLoading3.Token);
         }

@@ -26,7 +26,7 @@ namespace AssetInventory
 {
     public static class AI
     {
-        public const string VERSION = "3.4.0";
+        public const string VERSION = "3.5.0";
         public const string DEFINE_SYMBOL = "ASSET_INVENTORY";
         public const string DEFINE_SYMBOL_OLLAMA = DEFINE_SYMBOL + "_OLLAMA";
         public const string DEFINE_SYMBOL_HIDE_AI = DEFINE_SYMBOL + "_HIDE_AI";
@@ -313,6 +313,7 @@ namespace AssetInventory
                 }
             }
             UnityPreviewGenerator.CleanUp();
+            DependencyAnalysis.CleanUp();
 
             GetAssetCacheFolder(); // cache into main thread since GetConfig is not available from threads
             UpdateSystemData();
@@ -374,7 +375,7 @@ namespace AssetInventory
             if (!CacheLimiter.Enabled || CacheLimiter.IsRunning) return;
             if ((DateTime.Now - CacheLimiter.LastCheckTime).TotalMinutes < CACHE_LIMIT_INTERVAL) return;
 
-            CacheLimiter.CheckAndClean();
+            _ = CacheLimiter.CheckAndClean();
         }
 
         private static void SetupDefines()
@@ -532,6 +533,17 @@ namespace AssetInventory
             string tempPath = GetMaterializedAssetPath(asset);
             string indicator = Path.Combine(tempPath, PARTIAL_INDICATOR);
 
+            // Check available disk space before extraction
+            long freeSpace = IOUtils.GetFreeSpace(tempPath);
+            long required = asset.PackageSize * 5; // Conservative estimate (5x compression ratio)
+            if (freeSpace >= 0 && freeSpace < required)
+            {
+                Debug.LogError($"Cannot extract '{asset}': Insufficient disk space. " +
+                    $"Estimated need: {StringUtils.FormatBytes(required)}, " +
+                    $"Available: {StringUtils.FormatBytes(freeSpace)}");
+                return null;
+            }
+
             // don't extract again if already done and version is known
             if (!string.IsNullOrWhiteSpace(asset.GetSafeVersion()) && Directory.Exists(tempPath) && !File.Exists(indicator)) return tempPath;
 
@@ -657,6 +669,20 @@ namespace AssetInventory
                     catch (Exception e)
                     {
                         Debug.LogError($"Could not extract archive '{archivePath}' due to errors: {e.Message}");
+
+                        // Clean up partial extraction to avoid wasting disk space
+                        try
+                        {
+                            if (Directory.Exists(tempPath))
+                            {
+                                Directory.Delete(tempPath, true);
+                            }
+                        }
+                        catch (Exception cleanupEx)
+                        {
+                            Debug.LogWarning($"Could not clean up partial extraction at '{tempPath}': {cleanupEx.Message}. Manual cleanup may be required.");
+                        }
+
                         return null;
                     }
                     RunCacheLimiter();
@@ -1333,59 +1359,99 @@ namespace AssetInventory
             if (download) DownloadMedia(info);
         }
 
+        internal static async Task LoadFullMediaOnDemand(AssetInfo info, AssetMedia media)
+        {
+            // If already loaded or currently loading, skip
+            if (media.Texture != null || media.IsDownloading) return;
+
+            // Skip for special types that don't need full media
+            if (media.Type == "youtube" || media.Type == "vimeo" || media.Type == "sketchfab" ||
+                media.Type == "attachment_audio" || media.Type == "attachment_video" ||
+                media.Type == "soundcloud" || media.Type == "mixcloud")
+            {
+                return;
+            }
+
+            // Skip if no URL available
+            if (string.IsNullOrWhiteSpace(media.Url)) return;
+
+            string targetFile = info.ToAsset().GetMediaFile(media, GetPreviewFolder(), false);
+
+            // Download if not exists
+            if (!File.Exists(targetFile))
+            {
+                media.IsDownloading = true;
+                await AssetUtils.LoadImageAsync(media.Url, targetFile);
+                media.IsDownloading = false;
+            }
+
+            // Load texture from file
+            if (File.Exists(targetFile))
+            {
+                media.Texture = await LoadTextureWithRoundedCorners(targetFile);
+            }
+        }
+
         private static async void DownloadMedia(AssetInfo info)
         {
             List<AssetMedia> files = info.Media.Where(m => !m.IsDownloading).OrderBy(m => m.Order).ToList();
-            for (int i = 0; i < files.Count; i++)
+
+            // Process sequentially to avoid overwhelming the system during scrolling
+            foreach (AssetMedia file in files)
             {
-                if (info.Media == null) return; // happens when cancelled
-                if (info.Media[i].IsDownloading) continue;
+                await DownloadMediaFileAsync(info, file);
+            }
+        }
 
-                // thumbnail
-                if (!string.IsNullOrWhiteSpace(files[i].ThumbnailUrl))
-                {
-                    string thumbnailFile = info.ToAsset().GetMediaThumbnailFile(files[i], GetPreviewFolder(), false);
-                    if (!File.Exists(thumbnailFile))
-                    {
-                        if (info.Media == null) return; // happens when cancelled
-                        info.Media[i].IsDownloading = true;
-                        await AssetUtils.LoadImageAsync(files[i].ThumbnailUrl, thumbnailFile);
-                        if (info.Media == null) return; // happens when cancelled
-                        info.Media[i].IsDownloading = false;
-                    }
-                    if (info.Media != null && !info.Media[i].IsDownloading && File.Exists(thumbnailFile))
-                    {
-                        files[i].ThumbnailTexture = await AssetUtils.LoadLocalTexture(thumbnailFile, false); //, Config.mediaThumbnailWidth, true);
-                    }
-                    else
-                    {
-                        // fallback icon
-                        files[i].ThumbnailTexture = ((Texture2D)EditorGUIUtility.IconContent("d_PlayButton").image).MakeReadable();
-                    }
-                }
-                else if (files[i].Type == "attachment_audio")
-                {
-                    files[i].ThumbnailTexture = ((Texture2D)EditorGUIUtility.IconContent("audioclip icon").image).MakeReadable();
-                }
+        private static async Task DownloadMediaFileAsync(AssetInfo info, AssetMedia file)
+        {
+            if (info.Media == null) return; // happens when cancelled
+            if (file.IsDownloading) return;
 
-                // full (not needed for special types as they are not displayed in full size)
-                if (!string.IsNullOrWhiteSpace(files[i].Url) && files[i].Type != "youtube" && files[i].Type != "vimeo" && files[i].Type != "sketchfab" && files[i].Type != "attachment_audio" && files[i].Type != "attachment_video" && files[i].Type != "soundcloud" && files[i].Type != "mixcloud")
+            // thumbnail
+            if (!string.IsNullOrWhiteSpace(file.ThumbnailUrl))
+            {
+                string thumbnailFile = info.ToAsset().GetMediaThumbnailFile(file, GetPreviewFolder(), false);
+                if (!File.Exists(thumbnailFile))
                 {
-                    string targetFile = info.ToAsset().GetMediaFile(files[i], GetPreviewFolder(), false);
-                    if (!File.Exists(targetFile))
-                    {
-                        if (info.Media == null) return; // happens when cancelled
-                        info.Media[i].IsDownloading = true;
-                        await AssetUtils.LoadImageAsync(files[i].Url, targetFile);
-                        if (info.Media == null) return; // happens when cancelled
-                        info.Media[i].IsDownloading = false;
-                    }
-                    if (info.Media != null && !info.Media[i].IsDownloading && File.Exists(targetFile))
-                    {
-                        files[i].Texture = await AssetUtils.LoadLocalTexture(targetFile, false); //, Mathf.RoundToInt(Config.mediaHeight * 1.5f), true);
-                    }
+                    if (info.Media == null) return; // happens when cancelled
+                    file.IsDownloading = true;
+                    await AssetUtils.LoadImageAsync(file.ThumbnailUrl, thumbnailFile);
+                    if (info.Media == null) return; // happens when cancelled
+                    file.IsDownloading = false;
+                }
+                if (info.Media != null && !file.IsDownloading && File.Exists(thumbnailFile))
+                {
+                    file.ThumbnailTexture = await LoadTextureWithRoundedCorners(thumbnailFile);
+                }
+                else
+                {
+                    // fallback icon
+                    file.ThumbnailTexture = ((Texture2D)EditorGUIUtility.IconContent("d_PlayButton").image).MakeReadable();
                 }
             }
+            else if (file.Type == "attachment_audio")
+            {
+                file.ThumbnailTexture = ((Texture2D)EditorGUIUtility.IconContent("audioclip icon").image).MakeReadable();
+            }
+
+            // Note: Full media is now loaded on-demand via LoadFullMediaOnDemand() to save memory
+        }
+
+        private static async Task<Texture2D> LoadTextureWithRoundedCorners(string filePath)
+        {
+            Texture2D texture = await AssetUtils.LoadLocalTexture(filePath, false);
+            if (texture == null) return null;
+
+            if (AI.Config.mediaCornerRadius > 0)
+            {
+                Texture2D roundedTexture = texture.WithRoundedCorners(AI.Config.mediaCornerRadius);
+                // Dispose of the original texture since we only need the rounded version
+                UnityEngine.Object.DestroyImmediate(texture);
+                return roundedTexture;
+            }
+
+            return texture;
         }
 
         public static int CountPurchasedAssets(IEnumerable<AssetInfo> assets)
@@ -1526,7 +1592,7 @@ namespace AssetInventory
             HashSet<string> importedFiles = new HashSet<string>();
             string targetPath = Path.Combine(finalPath, Path.GetFileName(sourcePath));
             if (previewMode) targetPath = targetPath.Replace("~", ""); // otherwise asset database will not create previews for it
-            targetPath = DoCopyTo(workInfo, sourcePath, targetPath, reimport, outOfProject);
+            targetPath = await DoCopyTo(workInfo, sourcePath, targetPath, reimport, outOfProject);
             if (targetPath == null) return null; // error occurred
             importedFiles.Add(targetPath);
 
@@ -1564,7 +1630,26 @@ namespace AssetInventory
 
                                 case 1:
                                     string path = deps[i].Path;
-                                    if (path.ToLowerInvariant().StartsWith("assets/")) path = path.Substring(7);
+                                    string lowerPath = path.ToLowerInvariant();
+                                    
+                                    // Handle both relative paths (assets/...) and absolute paths (.../Assets/...)
+                                    // Check if path starts with "assets/" or contains "/assets/" (standalone directory)
+                                    int assetsIndex = -1;
+                                    if (lowerPath.StartsWith("assets/"))
+                                    {
+                                        assetsIndex = 0;
+                                    }
+                                    else
+                                    {
+                                        int slashIndex = lowerPath.IndexOf("/assets/", StringComparison.OrdinalIgnoreCase);
+                                        if (slashIndex >= 0) assetsIndex = slashIndex + 1;
+                                    }
+                                    
+                                    if (assetsIndex >= 0)
+                                    {
+                                        path = path.Substring(assetsIndex + 7); // Skip "assets/"
+                                    }
+                                    
                                     targetPath = Path.Combine(
                                         folder,
                                         asset.AssetSource == Asset.Source.RegistryPackage && !previewMode ? asset.SafeName : "",
@@ -1574,7 +1659,7 @@ namespace AssetInventory
 
                             AssetInfo depInfo = new AssetInfo().CopyFrom(asset, deps[i]);
                             if (previewMode) targetPath = targetPath.Replace("~", "");
-                            targetPath = DoCopyTo(depInfo, sourcePath, targetPath, reimport, outOfProject);
+                            targetPath = await DoCopyTo(depInfo, sourcePath, targetPath, reimport, outOfProject);
                             if (targetPath == null) return null; // error occurred
                             importedFiles.Add(targetPath);
                         }
@@ -1645,7 +1730,7 @@ namespace AssetInventory
             }
         }
 
-        private static string DoCopyTo(AssetInfo info, string sourcePath, string targetPath, bool reimport = false, bool outOfProject = false)
+        private static async Task<string> DoCopyTo(AssetInfo info, string sourcePath, string targetPath, bool reimport = false, bool outOfProject = false)
         {
             try
             {
@@ -1671,25 +1756,37 @@ namespace AssetInventory
                 {
                     // copy contents of source path to target path
                     string[] files = Directory.GetFiles(sourcePath, "*", SearchOption.AllDirectories);
+
+                    // Record created directories to avoid repeated checks
+                    HashSet<string> createdDirs = new HashSet<string>();
                     foreach (string file in files)
                     {
                         string relativePath = file.Substring(sourcePath.Length + 1);
                         string targetFile = Path.Combine(targetFolder, relativePath);
                         string targetFolder2 = Path.GetDirectoryName(targetFile);
-                        Directory.CreateDirectory(targetFolder2);
-                        File.Copy(file, targetFile, true);
+
+                        if (createdDirs.Add(targetFolder2))
+                        {
+                            Directory.CreateDirectory(targetFolder2);
+                        }
+
+                        // Use TryCopyFile for consistency and retry logic
+                        if (!await IOUtils.TryCopyFile(file, targetFile, true))
+                        {
+                            Debug.LogWarning($"Failed to copy file '{file}' to '{targetFile}'");
+                        }
                     }
                     return AssetUtils.RemoveProjectRoot(targetPath);
                 }
 
-                // FIXME: this can (very seldom) fail in parallel calls when the file is already in use, need some sort of retry or lock
-                File.Copy(sourcePath, targetPath, true);
+                // this can (very seldom) fail in parallel calls when the file is already in use
+                if (!await IOUtils.TryCopyFile(sourcePath, targetPath, true)) throw new Exception("Source file might be locked by another process.");
 
                 string sourceMetaPath = sourcePath + ".meta";
                 string targetMetaPath = targetPath + ".meta";
                 if (File.Exists(sourceMetaPath))
                 {
-                    File.Copy(sourceMetaPath, targetMetaPath, true);
+                    if (!await IOUtils.TryCopyFile(sourceMetaPath, targetMetaPath, true)) throw new Exception("Meta file might be locked by another process.");
 
                     // adjust meta file to contain asset origin
                     string[] metaContent = File.ReadAllLines(targetMetaPath);

@@ -10,7 +10,6 @@ namespace AssetInventory
 {
     internal sealed class AssetTreeViewControl : TreeViewWithTreeModel<AssetInfo>
     {
-        private const float ROW_HEIGHT = 20f;
         private const float TOGGLE_WIDTH = 20f;
 
         public enum Columns : int
@@ -65,7 +64,6 @@ namespace AssetInventory
             columnIndexForTreeFoldouts = 0;
             showAlternatingRowBackgrounds = true;
             showBorder = true;
-            customFoldoutYOffset = (ROW_HEIGHT - EditorGUIUtility.singleLineHeight) * 0.5f; // center foldout in the row since we also center content. See RowGUI
             extraSpaceBeforeIconAndLabel = TOGGLE_WIDTH;
 
             UpdateRowHeight();
@@ -82,14 +80,8 @@ namespace AssetInventory
 
         private void UpdateRowHeight()
         {
-            // Check if Media column is visible and adjust row height multiplier accordingly
-            float rowHeightMultiplier = AI.Config.rowHeightMultiplier;
-            if (_isMediaColumnVisible)
-            {
-                rowHeightMultiplier = 6f;
-            }
-
-            rowHeight = ROW_HEIGHT * rowHeightMultiplier;
+            // Check if Media column is visible and adjust row height accordingly
+            rowHeight = _isMediaColumnVisible ? AI.Config.rowHeightMedia : AI.Config.rowHeight;
 
             // Update extra space for icon when in media column mode
             extraSpaceBeforeIconAndLabel = _isMediaColumnVisible ? (TOGGLE_WIDTH * 3 + 5) : TOGGLE_WIDTH;
@@ -105,12 +97,16 @@ namespace AssetInventory
 
             IList<TreeViewItem> allRows = GetRows();
 
-            // Dispose media for items that are not in the visible area
+            // Dispose media for items that are not in the visible area and not selected
             for (int i = 0; i < allRows.Count; i++)
             {
                 if (i < firstRow || i > lastRow)
                 {
                     TreeViewItem item = allRows[i];
+                    
+                    // Don't dispose media for selected items
+                    if (state.selectedIDs.Contains(item.id)) continue;
+                    
                     if (item is TreeViewItem<AssetInfo> assetItem && assetItem.Data != null)
                     {
                         assetItem.Data.DisposeMedia();
@@ -515,24 +511,28 @@ namespace AssetInventory
             if (media == null || media.Count == 0) return;
 
             // Calculate image size to fit the row height with some padding
-            float imageSize = cellRect.height - 4f; // Leave 4px padding (2px top + 2px bottom)
-            float spacing = 2f;
+            float imageHeight = cellRect.height * (AI.Config.mediaYFillRatio / 100f);
+            float spacing = AI.Config.mediaXSpacing;
             float startX = cellRect.x + spacing;
-            float y = cellRect.y + (cellRect.height - imageSize) / 2f;
+            float y = cellRect.y + (cellRect.height - imageHeight) / 2f;
 
             foreach (AssetMedia mediaItem in media)
             {
                 if (mediaItem.Type != "screenshot") continue;
 
+                // Thumbnails are always loaded, full media is only a fallback if thumbnail unavailable
+                // (we don't load full media on-demand here to avoid performance issues during tree rendering)
                 Texture2D texture = mediaItem.ThumbnailTexture ?? mediaItem.Texture;
                 if (texture != null)
                 {
-                    // Check if we have enough space for another image
-                    if (startX + imageSize > cellRect.x + cellRect.width - spacing) break;
+                    float imageWidth = AI.Config.mediaSameWidth ? imageHeight : (imageHeight / texture.height) * texture.width;
 
-                    Rect imageRect = new Rect(startX, y, imageSize, imageSize);
-                    GUI.DrawTexture(imageRect, texture, ScaleMode.ScaleToFit);
-                    startX += imageSize + spacing;
+                    // Check if we have enough space for another image
+                    if (startX + imageWidth > cellRect.x + cellRect.width - spacing) break;
+
+                    Rect imageRect = new Rect(startX, y, imageWidth, imageHeight);
+                    GUI.DrawTexture(imageRect, texture, AI.Config.mediaMaintainAspect ? ScaleMode.ScaleToFit : ScaleMode.StretchToFill);
+                    startX += imageWidth + spacing;
                 }
             }
         }
@@ -564,13 +564,13 @@ namespace AssetInventory
             {
                 // For wrapped text, center the entire text block vertically
                 float textHeight = labelStyle.CalcHeight(content, textRect.width);
-                
+
                 // Constrain text height to not exceed the available row height
                 if (textHeight > cellRect.height)
                 {
                     textHeight = cellRect.height;
                 }
-                
+
                 textRect.y = cellRect.y + (cellRect.height - textHeight) / 2f;
                 textRect.height = textHeight;
                 EditorGUI.LabelField(textRect, displayName, labelStyle);

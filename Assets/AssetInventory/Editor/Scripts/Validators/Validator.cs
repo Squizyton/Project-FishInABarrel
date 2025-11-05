@@ -31,8 +31,8 @@ namespace AssetInventory
         public string Description { get; protected set; }
         public bool Fixable { get; protected set; } = true;
         public string FixCaption { get; protected set; } = "Fix";
-        public List<AssetInfo> DBIssues { get; protected set; } = new List<AssetInfo>();
-        public List<string> FileIssues { get; protected set; } = new List<string>();
+        public List<AssetInfo> DBIssues { get; set; } = new List<AssetInfo>();
+        public List<string> FileIssues { get; set; } = new List<string>();
 
         // runtime properties
         public State CurrentState { get; protected set; }

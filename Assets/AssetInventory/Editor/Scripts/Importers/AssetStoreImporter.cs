@@ -32,8 +32,8 @@ namespace AssetInventory
                 // store for later troubleshooting
                 File.WriteAllText(Path.Combine(AI.GetStorageFolder(), DIAG_PURCHASES), JsonConvert.SerializeObject(assets, Formatting.Indented));
 
-                // Process in chunks of 500 for optimal performance and editor responsiveness
-                int chunkSize = 250;
+                // Process in chunks for optimal performance and editor responsiveness
+                int chunkSize = AI.Config.purchaseBatchSize;
                 for (int chunkStart = 0; chunkStart < MainCount; chunkStart += chunkSize)
                 {
                     int chunkEnd = Math.Min(chunkStart + chunkSize, MainCount);
@@ -126,8 +126,6 @@ namespace AssetInventory
 
         public async Task<bool> FetchAssetsDetails(bool forceUpdate = false, int assetId = 0, bool resetEtag = false)
         {
-            bool requireReload = false;
-
             if (forceUpdate)
             {
                 string eTag = resetEtag ? ", ETag=null" : "";
@@ -154,6 +152,33 @@ namespace AssetInventory
                     .ToList();
             }
 
+            return await FetchAssetsDetailsInternal(assets);
+        }
+
+        public async Task<bool> FetchAssetsDetails(List<Asset> assets, bool forceUpdate = false, bool resetEtag = false)
+        {
+            if (forceUpdate)
+            {
+                string eTag = resetEtag ? ", ETag=null" : "";
+                string assetIds = string.Join(",", assets.Select(a => a.Id));
+                if (!string.IsNullOrEmpty(assetIds))
+                {
+                    DBAdapter.DB.Execute($"update Asset set LastOnlineRefresh=0{eTag} where Id in ({assetIds})");
+                }
+                assets.ForEach(a =>
+                {
+                    a.LastOnlineRefresh = DateTime.MinValue;
+                    if (resetEtag) a.ETag = null;
+                });
+            }
+
+            return await FetchAssetsDetailsInternal(assets);
+        }
+
+        private async Task<bool> FetchAssetsDetailsInternal(List<Asset> assets)
+        {
+            bool requireReload = false;
+
             string previewFolder = AI.GetPreviewFolder();
 
             SemaphoreSlim semaphore = new SemaphoreSlim(AI.Config.maxConcurrentUnityRequests);
@@ -176,6 +201,7 @@ namespace AssetInventory
                     try
                     {
                         AssetDetails details = await AssetStore.RetrieveAssetDetails(curAssetId, currentAsset.ETag);
+                        DateTime oldLastUpdate = currentAsset.LastUpdate;
                         currentAsset = DBAdapter.DB.Find<Asset>(a => a.Id == currentAsset.Id); // reload in case it was changed in the meantime
                         if (details == null) // happens if unchanged through etag
                         {
@@ -183,6 +209,8 @@ namespace AssetInventory
                             DBAdapter.DB.Update(currentAsset);
                             return;
                         }
+                        currentAsset.LastUpdate = oldLastUpdate;
+
                         if (!string.IsNullOrEmpty(details.packageName) && currentAsset.AssetSource != Asset.Source.RegistryPackage)
                         {
                             // special case of registry packages listed on asset store
@@ -273,8 +301,14 @@ namespace AssetInventory
                         currentAsset.Revision = details.revision;
                         currentAsset.Slug = details.slug;
                         currentAsset.LatestVersion = details.version.name;
+
                         currentAsset.LastRelease = details.version.publishedDate;
                         if (currentAsset.LastRelease == DateTime.MinValue) currentAsset.LastRelease = details.updatedTime; // can happen for deprecated assets, their version published date will be 0
+
+                        // store updatedTime here as well since publishedDate is the date of the last upload, which can be way off for deprecated assets
+                        // only store newer dates since updatedTime can be older than the update date coming from update API
+                        if (details.updatedTime > currentAsset.LastUpdate) currentAsset.LastUpdate = details.updatedTime;
+
                         if (details.productReview != null)
                         {
                             if (float.TryParse(details.productReview.ratingAverage, NumberStyles.Float, CultureInfo.InvariantCulture, out float rating)) currentAsset.AssetRating = rating;
@@ -392,36 +426,112 @@ namespace AssetInventory
             return requireReload;
         }
 
-        public async Task<bool> FetchAssetUpdates()
+        public async Task<List<Asset>> FetchAssetUpdates(bool forceUpdate = false)
         {
-            bool requireReload = false;
+            List<Asset> itemsToUpdate = new List<Asset>();
 
             List<Asset> assets = DBAdapter.DB.Table<Asset>()
-                .Where(a => a.ForeignId > 0)
+                .Where(a => a.ForeignId > 0 && a.ParentId <= 0)
                 .OrderBy(a => a.LastOnlineRefresh)
                 .ToList();
 
-            MainCount = assets.Count;
-            for (int i = 0; i < assets.Count; i++)
+            // check only those which are outside of refresh window
+            if (!forceUpdate)
             {
-                Asset asset = assets[i];
-                SetProgress(asset.DisplayName, i + 1);
-                if (i % 5 == 0) await Task.Yield(); // let editor breathe
-                if (CancellationRequested) break;
-
-                try
-                {
-                    // AssetUpdateResult update = await AssetStore.RetrieveAssetUpdates();
-
-                    // DBAdapter.DB.Update(asset);
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError($"Error fetching asset updates: {e.Message}");
-                }
+                assets = assets
+                    .Where(a => (DateTime.Now - a.LastOnlineRefresh).TotalHours >= AI.Config.metadataTimeout)
+                    .ToList();
             }
 
-            return requireReload;
+            if (assets.Count == 0) return itemsToUpdate;
+
+#if UNITY_6000_4_OR_NEWER
+            int chunkSize = 30; // API limit, needs to be lower since otherwise connection throws "unreadable" errors, might be temporary curl issue in Unity alpha
+#else
+            int chunkSize = 100; // API limit
+#endif
+            int totalChunks = (int)Math.Ceiling((double)assets.Count / chunkSize);
+            MainCount = totalChunks;
+
+            for (int i = 0; i < totalChunks; i += AI.Config.maxConcurrentUnityRequests)
+            {
+                List<Task<(List<Asset> chunk, AssetUpdateResult update)>> currentBatch = new List<Task<(List<Asset>, AssetUpdateResult)>>();
+
+                for (int j = i; j < i + AI.Config.maxConcurrentUnityRequests && j < totalChunks; j++)
+                {
+                    int skipCount = j * chunkSize;
+                    List<Asset> chunk = assets.Skip(skipCount).Take(chunkSize).ToList();
+
+                    async Task<(List<Asset>, AssetUpdateResult)> ProcessChunk(List<Asset> chunkToProcess)
+                    {
+                        try
+                        {
+                            AssetUpdateResult update = await AssetStore.RetrieveAssetUpdates(chunkToProcess);
+                            return (chunkToProcess, update);
+                        }
+                        catch (Exception e)
+                        {
+                            Debug.LogError($"Error fetching asset updates: {e.Message}");
+                            return (chunkToProcess, null);
+                        }
+                    }
+
+                    currentBatch.Add(ProcessChunk(chunk));
+                }
+
+                (List<Asset> chunk, AssetUpdateResult update)[] batchResults = await Task.WhenAll(currentBatch);
+                if (batchResults.All(r => r.update == null)) return null; // all failed
+
+                for (int k = 0; k < batchResults.Length; k++)
+                {
+                    if (CancellationRequested) break;
+
+                    SetProgress("Fetching Asset Store updates...", i + k + 1);
+
+                    (List<Asset> chunk, AssetUpdateResult update) = batchResults[k];
+                    if (update == null) continue;
+
+                    // initialize with all items that were not returned and never fetched
+                    List<Asset> chunkUpdates = chunk
+                        .Where(a => !update.result.results.Any(r => r.id == a.ForeignId.ToString()))
+                        .Where(a => string.IsNullOrWhiteSpace(a.OfficialState))
+                        .ToList();
+
+                    // add items with newer publish date
+                    update.result.results.ForEach(r =>
+                    {
+                        Asset info = chunk.FirstOrDefault(a => a.ForeignId.ToString() == r.id);
+                        if (info == null) return;
+                        if (string.IsNullOrEmpty(r.published_at))
+                        {
+                            chunkUpdates.Add(info);
+                            return;
+                        }
+
+                        if (DateTime.TryParse(r.published_at, out DateTime publishedAt) && (publishedAt - info.LastUpdate).Days > 0)
+                        {
+                            info.LastUpdate = publishedAt; // set here so we can reuse it later during update since details update date might be older than this one here for some reason
+                            chunkUpdates.Add(info);
+                        }
+                    });
+
+                    itemsToUpdate.AddRange(chunkUpdates);
+
+                    // Update LastOnlineRefresh for items in chunk that are not are already up-to-date
+                    HashSet<int> updateIds = new HashSet<int>(chunkUpdates.Select(a => a.Id));
+                    List<int> idsToRefresh = chunk.Where(a => !updateIds.Contains(a.Id)).Select(a => a.Id).ToList();
+
+                    if (idsToRefresh.Count > 0)
+                    {
+                        string idList = string.Join(",", idsToRefresh);
+                        DBAdapter.DB.Execute($"UPDATE Asset SET LastOnlineRefresh = ? WHERE Id IN ({idList})", DateTime.Now);
+                    }
+                }
+
+                if (CancellationRequested) break;
+            }
+
+            return itemsToUpdate;
         }
 
         private async Task<AssetPurchases> RetrievePurchases()

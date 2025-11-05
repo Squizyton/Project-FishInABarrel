@@ -38,8 +38,8 @@ namespace AssetInventory
             EditorGUILayout.LabelField($"'{_info.FileName}' in asset '{_info.GetDisplayName()}'", EditorStyles.wordWrappedLabel);
             EditorGUILayout.Space();
 
+            EditorGUILayout.BeginVertical("box");
             int labelWidth = 130;
-
             if (_info.CrossPackageDependencies.Count > 1)
             {
                 GUILabelWithTextNoMax("Dependencies", $"{_info.Dependencies.Count:N0} across {_info.CrossPackageDependencies.Count + 1:N0} packages", labelWidth);
@@ -54,7 +54,7 @@ namespace AssetInventory
                 GUILabelWithTextNoMax("SRP Support", _info.SRPSupportPackage.DisplayName, labelWidth);
             }
 
-            if (ShowAdvanced()) GUILabelWithTextNoMax("File Types", _dependencyTypes, labelWidth);
+            if (ShowAdvanced()) GUILabelWithTextNoMax("File Types", _dependencyTypes, labelWidth, null, true);
             GUILabelWithTextNoMax("Asset Size", EditorUtility.FormatBytes(_info.Size), labelWidth);
             GUILabelWithTextNoMax("Dependencies Size", EditorUtility.FormatBytes(_info.Dependencies.Sum(f => f.Size)), labelWidth);
 
@@ -62,6 +62,7 @@ namespace AssetInventory
             {
                 GUILabelWithTextNoMax("Remaining", EditorUtility.FormatBytes(_info.Dependencies.Where(f => !f.InProject).Sum(f => f.Size)), labelWidth);
             }
+            EditorGUILayout.EndVertical();
 
             EditorGUILayout.Space();
 
@@ -93,7 +94,6 @@ namespace AssetInventory
                 EditorGUILayout.LabelField(
                     new GUIContent(info.Path + " (" + EditorUtility.FormatBytes(info.Size) + (fromSupport ? ", SRP Override" : "") + ")", info.Guid),
                     _info.ScriptDependencies.Contains(info) ? UIStyles.ColoredText(Color.yellow, true) : EditorStyles.wordWrappedLabel);
-                GUILayout.FlexibleSpace();
                 GUILayout.EndHorizontal();
             }
             GUILayout.EndScrollView();

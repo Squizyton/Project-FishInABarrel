@@ -27,6 +27,7 @@ namespace AssetInventory
         public DateTime lastRefresh = DateTime.MinValue;
 
         private AssetInfo _asset;
+        private bool _expectFullDownload;
         private readonly AssetDownloadState _assetState = new AssetDownloadState();
 
         // caching
@@ -35,6 +36,7 @@ namespace AssetInventory
         public AssetDownloader(AssetInfo asset)
         {
             _asset = asset.GetRoot();
+            AssetDownloaderUtils.OnDownloadSuccessful += OnDownloadSuccessful;
             AssetDownloaderUtils.OnDownloadFinished += OnDownloadFinished;
         }
 
@@ -48,7 +50,7 @@ namespace AssetInventory
             _asset = asset.GetRoot();
         }
 
-        private void OnDownloadFinished(int foreignId)
+        private void OnDownloadSuccessful(int foreignId)
         {
             if (_asset.ForeignId != foreignId) return;
 
@@ -57,6 +59,14 @@ namespace AssetInventory
             DBAdapter.DB.Execute("update Asset set CurrentSubState=0, Version=? where Id=?", _asset.LatestVersion, _asset.AssetId);
             _asset.Refresh();
             _asset.PackageDownloader?.RefreshState();
+        }
+
+        private void OnDownloadFinished(int foreignId)
+        {
+            if (_asset.ForeignId != foreignId) return;
+
+            // would be good to do but this will fill up the recycle bin on Windows, let Unity manage this
+            // if (_expectFullDownload) _assetState.DeleteTempFiles();
         }
 
         public bool IsDownloadSupported()
@@ -79,7 +89,17 @@ namespace AssetInventory
             lastRefresh = DateTime.Now;
             _headerCache.Clear();
 
-            CheckState();
+            try
+            {
+                CheckState();
+            }
+            catch (Exception)
+            {
+                // can happen if Unity just finished downloading, checkAssetDownload can trigger an exception then from Unity side, usually ok to ignore, do not change state yet
+                // Debug.LogError($"Error checking download state for '{_asset.GetDisplayName()}': {e.Message}\n{e.StackTrace}. This may occur with network drives or locked files.");
+                // _assetState.SetState(State.Unknown);
+                return;
+            }
 
             // TODO: do whenever file changes, not here?
             if (_assetState.state == State.Downloading)
@@ -99,17 +119,34 @@ namespace AssetInventory
             }
 
             string folder = Path.GetDirectoryName(targetFile);
+            if (string.IsNullOrEmpty(folder))
+            {
+                Debug.LogWarning($"Invalid target folder for asset '{_asset.GetDisplayName()}'");
+                _assetState.SetState(State.Unknown);
+                return;
+            }
 
             // see if any progress file is there
             FileInfo curFileInfo = null;
             FileInfo dlFileInfo = null;
             FileInfo redlFileInfo = null;
-            _assetState.downloadFile = Path.Combine(folder, $".{_asset.SafeName}-{_asset.ForeignId}.tmp");
-            _assetState.reDownloadFile = Path.Combine(folder, $".{_asset.SafeName}-content__{_asset.ForeignId}.tmp");
-            _assetState.downloadInfoFile = _assetState.downloadFile + ".json";
-            _assetState.reDownloadInfoFile = _assetState.reDownloadFile + ".json";
-            if (File.Exists(_assetState.downloadFile)) dlFileInfo = new FileInfo(_assetState.downloadFile);
-            if (File.Exists(_assetState.reDownloadFile)) redlFileInfo = new FileInfo(_assetState.reDownloadFile);
+
+            try
+            {
+                _assetState.downloadFile = Path.Combine(folder, $".{_asset.SafeName}-{_asset.ForeignId}.tmp");
+                _assetState.reDownloadFile = Path.Combine(folder, $".{_asset.SafeName}-content__{_asset.ForeignId}.tmp");
+                _assetState.downloadInfoFile = _assetState.downloadFile + ".json";
+                _assetState.reDownloadInfoFile = _assetState.reDownloadFile + ".json";
+
+                if (File.Exists(_assetState.downloadFile)) dlFileInfo = new FileInfo(_assetState.downloadFile);
+                if (File.Exists(_assetState.reDownloadFile)) redlFileInfo = new FileInfo(_assetState.reDownloadFile);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"Error accessing download files for '{_asset.GetDisplayName()}': {e.Message}");
+                _assetState.SetState(State.Unknown);
+                return;
+            }
 
             // Unity sometimes uses the redl file also for initial downloading (6000.0.2f1)
             if (dlFileInfo != null && redlFileInfo != null)
@@ -128,11 +165,20 @@ namespace AssetInventory
 
             if (curFileInfo != null)
             {
-                curFileInfo.Refresh(); // to ensure also data on network drives is up-to-date
-                _assetState.curDownloadFile = curFileInfo.FullName;
-                _assetState.curDownloadInfoFile = curFileInfo.FullName + ".json";
-                _assetState.bytesDownloaded = curFileInfo.Length;
-                _assetState.lastDownloadChange = curFileInfo.LastWriteTime;
+                try
+                {
+                    curFileInfo.Refresh(); // to ensure also data on network drives is up-to-date
+                    _assetState.curDownloadFile = curFileInfo.FullName;
+                    _assetState.curDownloadInfoFile = curFileInfo.FullName + ".json";
+                    _assetState.bytesDownloaded = curFileInfo.Length;
+                    _assetState.lastDownloadChange = curFileInfo.LastWriteTime;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"Error accessing download progress file for '{_asset.GetDisplayName()}': {e.Message}. This may happen with network drives.");
+                    _assetState.SetState(State.Unknown);
+                    return;
+                }
 
                 // check if paused
                 bool isUnityDownloading = IsUnityDownloading();
@@ -147,15 +193,7 @@ namespace AssetInventory
                 {
                     // if no change after a while, assume download is stuck
                     // try to clean up left over tmp files which are likely broken
-                    try
-                    {
-                        File.Delete(_assetState.curDownloadFile);
-                        if (File.Exists(_assetState.curDownloadInfoFile)) File.Delete(_assetState.curDownloadInfoFile);
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.Log($"Could not delete temp file {_assetState.curDownloadFile}: {e.Message}. This is unusual but not a problem. If the file is on a network share it could also mean Unity is still downloading the file. In that case running update again after a while will index it normally. Continuing with next package for now.");
-                    }
+                    _assetState.DeleteTempFiles();
                     _assetState.SetState(State.Unavailable);
                 }
                 return;
@@ -207,10 +245,30 @@ namespace AssetInventory
             _assetState.SetState(exists ? (_asset.IsUpdateAvailable() ? State.UpdateAvailable : State.Downloaded) : State.Unavailable);
         }
 
-        public void Download()
+        public void Download(bool expectFullDownload)
         {
             if (_asset.ParentId > 0) return; // safety check as this might otherwise lead to cache duplications
             if (!IsDownloadSupported()) return;
+
+            // Check available disk space before starting download
+            string targetFile = _asset.GetCalculatedLocation();
+            if (targetFile != null)
+            {
+                string folder = Path.GetDirectoryName(targetFile);
+                long freeSpace = IOUtils.GetFreeSpace(folder);
+                long required = _asset.PackageSize * 2; // 2x for safety margin
+
+                if (freeSpace >= 0 && freeSpace < required)
+                {
+                    Debug.LogError($"Cannot download '{_asset.GetDisplayName()}': Insufficient disk space. " +
+                        $"Required: {StringUtils.FormatBytes(required)}, " +
+                        $"Available: {StringUtils.FormatBytes(freeSpace)}");
+                    _assetState.SetState(State.Unavailable);
+                    return;
+                }
+            }
+
+            _expectFullDownload = expectFullDownload;
 
             Assembly assembly = Assembly.Load("UnityEditor.CoreModule");
             Type asc = assembly.GetType("UnityEditor.AssetStoreUtils");
@@ -234,7 +292,8 @@ namespace AssetInventory
             bool doResume = false;
             if (_assetState.state == State.Paused && File.Exists(_assetState.downloadInfoFile))
             {
-                DownloadState existingDls = JsonConvert.DeserializeObject<DownloadState>(File.ReadAllText(_assetState.downloadInfoFile));
+                // Use ReadAllTextWithShare to avoid locking download state files
+                DownloadState existingDls = JsonConvert.DeserializeObject<DownloadState>(IOUtils.ReadAllTextWithShare(_assetState.downloadInfoFile));
                 doResume = existingDls != null && existingDls.download.key == dls.download.key && existingDls.download.url == dls.download.url;
             }
             string json = JsonConvert.SerializeObject(dls);
@@ -269,8 +328,7 @@ namespace AssetInventory
                 await Task.Delay(2000);
 
                 // delete tmp files
-                if (File.Exists(_assetState.curDownloadFile)) IOUtils.TryDeleteFile(_assetState.curDownloadFile);
-                if (File.Exists(_assetState.curDownloadInfoFile)) IOUtils.TryDeleteFile(_assetState.curDownloadInfoFile);
+                _assetState.DeleteTempFiles();
 
                 AI.TriggerPackageRefresh();
             }
@@ -317,6 +375,19 @@ namespace AssetInventory
             lastStateChange = DateTime.Now;
         }
 
+        public void DeleteTempFiles()
+        {
+            try
+            {
+                if (File.Exists(curDownloadFile)) File.Delete(curDownloadFile);
+                if (File.Exists(curDownloadInfoFile)) File.Delete(curDownloadInfoFile);
+            }
+            catch (Exception e)
+            {
+                Debug.Log($"Could not delete temp file {curDownloadFile}: {e.Message}. This is unusual but not a problem. If the file is on a network share it could also mean Unity is still downloading the file. In that case running update again after a while will index it normally. Continuing with next package for now.");
+            }
+        }
+
         public override string ToString()
         {
             return $"Asset Download State '{state}' ({progress})";
@@ -325,16 +396,22 @@ namespace AssetInventory
 
     public static class AssetDownloaderUtils
     {
-        public static Action<int> OnDownloadFinished;
+        public static event Action<int> OnDownloadSuccessful;
+        public static event Action<int> OnDownloadFinished;
 
         public static void OnDownloadDone(string package_id, string message, int bytes, int total)
         {
+            int foreignId = int.Parse(package_id);
+
             if (message == "ok")
             {
-                OnDownloadFinished?.Invoke(int.Parse(package_id));
-                return;
+                OnDownloadSuccessful?.Invoke(foreignId);
             }
-            Debug.LogError($"Error downloading asset {package_id}: {message}");
+            else
+            {
+                Debug.LogError($"Error downloading asset {package_id}: {message}");
+            }
+            OnDownloadFinished?.Invoke(foreignId);
         }
     }
 }

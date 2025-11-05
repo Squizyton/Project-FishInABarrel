@@ -197,7 +197,8 @@ namespace AssetInventory
             Package info;
             try
             {
-                info = JsonConvert.DeserializeObject<Package>(File.ReadAllText(package), new JsonSerializerSettings
+                // Use ReadAllTextWithShare to avoid locking package.json files in Unity cache
+                info = JsonConvert.DeserializeObject<Package>(IOUtils.ReadAllTextWithShare(package), new JsonSerializerSettings
                 {
                     Error = (_, error) =>
                     {

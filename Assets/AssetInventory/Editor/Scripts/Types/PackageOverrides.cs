@@ -6,6 +6,7 @@ namespace AssetInventory
     public sealed class PackageOverrides
     {
         // default package properties
+        public int foreignId;
         public string displayName;
         public string displayCategory;
         public string safeCategory;

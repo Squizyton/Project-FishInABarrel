@@ -15,7 +15,6 @@ namespace AssetInventory
 
         private const int MIN_PREVIEW_CACHE_SIZE = 200;
         private const float PREVIEW_TIMEOUT = 25f;
-        private const float MIN_PREVIEW_WAIT = 9f;
         private const int BREAK_INTERVAL = 30;
         private static readonly List<PreviewRequest> _requests = new List<PreviewRequest>();
         private static readonly object _requestsLock = new object();
@@ -151,7 +150,7 @@ namespace AssetInventory
                                 if (Time.realtimeSinceStartup - req.TimeStarted < PREVIEW_TIMEOUT) continue;
                             }
                             if (req.Icon == null) req.Icon = AssetPreview.GetAssetPreview(req.Obj);
-                            if (req.Icon == null && Time.realtimeSinceStartup - req.TimeStarted < MIN_PREVIEW_WAIT) continue;
+                            if (req.Icon == null && Time.realtimeSinceStartup - req.TimeStarted < AI.Config.minPreviewWait) continue;
                         }
 
                         // still will not return something for all assets
@@ -173,7 +172,15 @@ namespace AssetInventory
                             if (bytes != null)
                             {
                                 // using await async variant will result in req.Icon getting set to Null in some cases for yet unknown reasons
-                                File.WriteAllBytes(req.DestinationFile, bytes);
+                                try
+                                {
+                                    File.WriteAllBytes(req.DestinationFile, bytes);
+                                }
+                                catch (IOException ioEx)
+                                {
+                                    Debug.LogError($"Failed to write preview for '{req.SourceFile}'. Disk may be full: {ioEx.Message}");
+                                    req.Icon = null; // Mark as failed
+                                }
                             }
                         }
                         req.OnDone?.Invoke(req);

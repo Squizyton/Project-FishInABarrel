@@ -134,7 +134,7 @@ namespace AssetInventory
 
         private static bool IsZipped(string fileName)
         {
-            using (FileStream fs = new FileStream(fileName, FileMode.Open, FileAccess.Read))
+            using (FileStream fs = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 byte[] buffer = new byte[2];
                 fs.Read(buffer, 0, buffer.Length);

@@ -27,6 +27,7 @@ namespace AssetInventory
         public static DriveInfo GetDriveInfoForPath(string folderPath)
         {
             if (string.IsNullOrEmpty(folderPath)) return null;
+            folderPath = ToShortPath(folderPath);
 
             folderPath = Path.GetFullPath(folderPath);
             DriveInfo bestMatch = null;
@@ -56,8 +57,16 @@ namespace AssetInventory
 
         public static long GetFreeSpace(string folderPath)
         {
-            DriveInfo drive = GetDriveInfoForPath(folderPath);
-            return drive.AvailableFreeSpace;
+            try
+            {
+                DriveInfo drive = GetDriveInfoForPath(folderPath);
+                if (drive == null) return -1;
+                return drive.AvailableFreeSpace;
+            }
+            catch (Exception)
+            {
+                return -1;
+            }
         }
 
         public static string NormalizeRelative(string path)
@@ -266,7 +275,83 @@ namespace AssetInventory
                     retries--;
                     if (retries >= 0)
                     {
-                        await Task.Delay(300);
+                        await Task.Delay(500);
+                    }
+                    else
+                    {
+                        Debug.LogError($"Could not copy file '{sourceFileName}' to '{destFileName}': {e.Message}");
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Reads all text from a file using FileShare.Read to avoid locking the file.
+        /// This is critical for Unity cache files that may be accessed by multiple editors.
+        /// </summary>
+        public static string ReadAllTextWithShare(string path)
+        {
+            using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (StreamReader reader = new StreamReader(stream))
+            {
+                return reader.ReadToEnd();
+            }
+        }
+
+        /// <summary>
+        /// Reads all bytes from a file using FileShare.Read to avoid locking the file.
+        /// This is critical for Unity cache files that may be accessed by multiple editors.
+        /// </summary>
+        public static byte[] ReadAllBytesWithShare(string path)
+        {
+            using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                byte[] buffer = new byte[stream.Length];
+                stream.Read(buffer, 0, buffer.Length);
+                return buffer;
+            }
+        }
+
+        /// <summary>
+        /// Copies a file using FileShare.Read to avoid locking the source file.
+        /// This is critical for Unity cache files that may be accessed by multiple editors.
+        /// </summary>
+        public static async Task<bool> CopyFileWithShare(string sourceFileName, string destFileName, bool overwrite, int retries = 5)
+        {
+            while (retries >= 0)
+            {
+                try
+                {
+                    // Ensure destination directory exists
+                    string directoryName = Path.GetDirectoryName(destFileName);
+                    if (!Directory.Exists(directoryName)) Directory.CreateDirectory(directoryName);
+
+                    // Check if destination exists and we're not overwriting
+                    if (File.Exists(destFileName) && !overwrite)
+                    {
+                        throw new IOException($"File already exists: {destFileName}");
+                    }
+
+                    // Copy file using FileStreams with FileShare.Read to avoid locking
+                    using (FileStream sourceStream = new FileStream(sourceFileName, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true))
+                    using (FileStream destStream = new FileStream(destFileName, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
+                    {
+                        await sourceStream.CopyToAsync(destStream);
+                    }
+
+                    // Copy file attributes
+                    File.SetAttributes(destFileName, File.GetAttributes(sourceFileName));
+
+                    return true;
+                }
+                catch (Exception e)
+                {
+                    retries--;
+                    if (retries >= 0)
+                    {
+                        await Task.Delay(500);
                     }
                     else
                     {
@@ -280,6 +365,12 @@ namespace AssetInventory
 
         public static bool TryDeleteFile(string path)
         {
+            // adjust attributes to ensure deletion
+            try { File.SetAttributes(path, FileAttributes.Normal); }
+            catch
+            { /* ignore */
+            }
+
             try
             {
                 File.Delete(path);
@@ -336,13 +427,13 @@ namespace AssetInventory
                     }
 
                     retries--;
-                    if (retries >= 0) await Task.Delay(300);
+                    if (retries >= 0) await Task.Delay(500);
                 }
                 catch (IOException)
                 {
                     // Often due to file locks; wait and retry
                     retries--;
-                    if (retries >= 0) await Task.Delay(300);
+                    if (retries >= 0) await Task.Delay(500);
                 }
                 catch
                 {
@@ -538,12 +629,12 @@ namespace AssetInventory
                 string rootPath = Path.GetPathRoot(fullPath);
 
                 bool isAtRoot = !string.IsNullOrEmpty(rootPath)
-                                && string.Equals(fullPath.TrimEnd('\\', '/'), rootPath.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
+                    && string.Equals(fullPath.TrimEnd('\\', '/'), rootPath.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
 
                 // Also catch bare drive letters like "E:" (without trailing slash)
                 string normalizedRaw = path.Replace('/', '\\').TrimEnd('\\', '/');
                 bool isDriveLetterOnly = normalizedRaw.Length == 2 && normalizedRaw[1] == ':'
-                                         && char.IsLetter(normalizedRaw[0]);
+                    && char.IsLetter(normalizedRaw[0]);
 
                 return isAtRoot || isDriveLetterOnly;
             }
@@ -552,6 +643,58 @@ namespace AssetInventory
                 // If Path.GetFullPath throws (illegal chars), treat as not root
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Gets the relative path from one path to another.
+        /// For Unity 2021.2+, uses the built-in Path.GetRelativePath.
+        /// For older versions, provides a custom implementation.
+        /// </summary>
+        /// <param name="relativeTo">The source path the result should be relative to</param>
+        /// <param name="path">The destination path</param>
+        /// <returns>The relative path, or the original path if it can't be made relative</returns>
+        public static string GetRelativePath(string relativeTo, string path)
+        {
+#if UNITY_2021_2_OR_NEWER
+            return Path.GetRelativePath(relativeTo, path);
+#else
+            if (string.IsNullOrEmpty(relativeTo)) return path;
+            if (string.IsNullOrEmpty(path)) return path;
+
+            try
+            {
+                Uri fromUri = new Uri(AppendDirectorySeparatorChar(Path.GetFullPath(relativeTo)));
+                Uri toUri = new Uri(Path.GetFullPath(path));
+
+                if (fromUri.Scheme != toUri.Scheme)
+                {
+                    return path; // Cannot make relative path between different schemes
+                }
+
+                Uri relativeUri = fromUri.MakeRelativeUri(toUri);
+                string relativePath = Uri.UnescapeDataString(relativeUri.ToString());
+
+                if (string.Equals(toUri.Scheme, Uri.UriSchemeFile, StringComparison.OrdinalIgnoreCase))
+                {
+                    relativePath = relativePath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+                }
+
+                return relativePath;
+            }
+            catch
+            {
+                return path;
+            }
+#endif
+        }
+
+        private static string AppendDirectorySeparatorChar(string path)
+        {
+            if (!Path.HasExtension(path) && !path.EndsWith(Path.DirectorySeparatorChar.ToString()))
+            {
+                return path + Path.DirectorySeparatorChar;
+            }
+            return path;
         }
 
         public static string ExecuteCommand(string command, string arguments, string workingDirectory = "", bool waitForExit = true, bool createWindow = false)
@@ -644,7 +787,10 @@ namespace AssetInventory
 
             try
             {
-                using (IArchive archive = ArchiveFactory.Open(archiveFile))
+                // CRITICAL: Open archive file with FileShare.Read to allow other Unity editors to read it simultaneously
+                // This prevents exclusive locking of Unity cache packages during extraction
+                using (FileStream archiveStream = new FileStream(archiveFile, FileMode.Open, FileAccess.Read, FileShare.Read))
+                using (IArchive archive = ArchiveFactory.Open(archiveStream))
                 {
                     foreach (IArchiveEntry entry in archive.Entries)
                     {

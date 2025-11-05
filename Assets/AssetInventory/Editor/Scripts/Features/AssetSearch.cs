@@ -38,6 +38,7 @@ namespace AssetInventory
             public UnityEngine.Color SelectedColor = UnityEngine.Color.white;
             public int SelectedImageType = 0;
             public string[] ImageTypeOptions = Array.Empty<string>();
+            public int SelectedPreviewFilter = 0; // 0=both, 1=has preview, 2=no preview
             public string RawSearchType = null; // precomputed caller value or null
             public bool IgnoreExcludedExtensions = false;
             public int CurrentPage = 1;
@@ -110,12 +111,36 @@ namespace AssetInventory
             // SRP filters
             switch (opt.SelectedPackageSRPs)
             {
+                case 0: // auto-detect
+                    if (AI.Config.excludeIncompatibleSRPs)
+                    {
+                        bool isURP = AssetUtils.IsOnURP();
+                        bool isHDRP = AssetUtils.IsOnHDRP();
+                        bool isBIRP = !isURP && !isHDRP;
+
+                        if (isBIRP)
+                        {
+                            wheres.Add("(Asset.BIRPCompatible = 1 OR (Asset.URPCompatible = 0 AND Asset.HDRPCompatible = 0))");
+                        }
+                        else if (isURP)
+                        {
+                            wheres.Add("(Asset.BIRPCompatible = 1 OR Asset.URPCompatible = 1 OR (Asset.URPCompatible = 0 AND Asset.HDRPCompatible = 0))");
+                        }
+                        else if (isHDRP)
+                        {
+                            wheres.Add("(Asset.BIRPCompatible = 1 OR Asset.HDRPCompatible = 1 OR (Asset.URPCompatible = 0 AND Asset.HDRPCompatible = 0))");
+                        }
+                    }
+                    break;
+
                 case 2:
                     wheres.Add("Asset.BIRPCompatible=1");
                     break;
+
                 case 3:
                     wheres.Add("Asset.URPCompatible=1");
                     break;
+
                 case 4:
                     wheres.Add("Asset.HDRPCompatible=1");
                     break;
@@ -402,11 +427,15 @@ namespace AssetInventory
                 wheres.Add("AssetFile.Type not in (" + string.Join(",", paramCount) + ")");
             }
 
-            // preview visibility
-            switch (AI.Config.previewVisibility)
+            // preview filter (has preview / no preview)
+            switch (opt.SelectedPreviewFilter)
             {
-                case 2: wheres.Add("AssetFile.PreviewState in (1, 2, 3)"); break;
-                case 3: wheres.Add("AssetFile.PreviewState not in (1, 2, 3)"); break;
+                case 2: // has preview
+                    wheres.Add("AssetFile.PreviewState in (1, 2, 3)"); // Provided, Redo, Custom
+                    break;
+                case 3: // no preview
+                    wheres.Add("AssetFile.PreviewState not in (1, 2, 3)"); // not Provided, Redo, Custom
+                    break;
             }
 
             // ordering, can only be done on DB side since post-processing results would only work on the paged results which is incorrect

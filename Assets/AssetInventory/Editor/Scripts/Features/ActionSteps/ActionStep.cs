@@ -11,6 +11,7 @@ namespace AssetInventory
         {
             FilesAndFolders,
             Importing,
+            Actions,
             Settings,
             Misc
         }

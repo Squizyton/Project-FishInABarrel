@@ -42,7 +42,7 @@ namespace AssetInventory
         public void OnGUI()
         {
             EditorGUILayout.Space();
-            GUILayout.BeginHorizontal();
+            GUILayout.BeginHorizontal("box");
             EditorGUILayout.LabelField("Folder", EditorStyles.boldLabel, GUILayout.Width(50));
             EditorGUILayout.LabelField(_folder + (_isUnityFolder ? " (Unity Project)" : ""));
             GUILayout.EndHorizontal();
@@ -171,7 +171,7 @@ namespace AssetInventory
 
             EditorGUILayout.Space();
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Add", GUILayout.Height(UIStyles.BIG_BUTTON_HEIGHT))) SaveSettings();
+            if (GUILayout.Button("Add", UIStyles.mainButton, GUILayout.Height(UIStyles.BIG_BUTTON_HEIGHT))) SaveSettings();
             // if (GUILayout.Button("Refresh", GUILayout.Height(UIStyles.BIG_BUTTON_HEIGHT), GUILayout.Width(80))) ParseFolder();
             GUILayout.EndHorizontal();
 

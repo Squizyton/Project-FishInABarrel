@@ -115,6 +115,23 @@ namespace AssetInventory
                         case "packagetag":
                             remaining.Add($"pt:{val}");
                             continue;
+                        case "preview":
+                            switch (val.ToLowerInvariant())
+                            {
+                                case "has":
+                                case "yes":
+                                case "true":
+                                case "1":
+                                    opt.SelectedPreviewFilter = 2;
+                                    continue;
+                                case "no":
+                                case "none":
+                                case "false":
+                                case "0":
+                                    opt.SelectedPreviewFilter = 3;
+                                    continue;
+                            }
+                            break;
                     }
                 }
 
@@ -202,7 +219,7 @@ namespace AssetInventory
             };
 
             // Add to scene
-            SearchAction addAction = new SearchAction(ProviderId, "add", null, "Add To Scene", (System.Action<SearchItem[]>)((items) =>
+            SearchAction addAction = new SearchAction(ProviderId, "Import", null, "Add To Scene", (System.Action<SearchItem[]>)((items) =>
             {
                 if (_isBusy) return;
                 if (items != null && items.Length > 0 && items[0]?.data is AssetInfo info)
@@ -214,7 +231,7 @@ namespace AssetInventory
             provider.actions.Add(addAction);
 
             // Open item
-            SearchAction openAction = new SearchAction(ProviderId, "open", null, "Open Item", (System.Action<SearchItem[]>)((items) =>
+            SearchAction openAction = new SearchAction(ProviderId, "Open", null, "Open Item", (System.Action<SearchItem[]>)((items) =>
             {
                 if (_isBusy) return;
                 if (items != null && items.Length > 0 && items[0]?.data is AssetInfo info)
@@ -226,7 +243,7 @@ namespace AssetInventory
             provider.actions.Add(openAction);
 
             // Search action (open Asset Inventory)
-            SearchAction searchAction = new SearchAction(ProviderId, "search", null, "Search in Asset Inventory", (System.Action<SearchItem[]>)((items) =>
+            SearchAction searchAction = new SearchAction(ProviderId, "Search", null, "Search in Asset Inventory", (System.Action<SearchItem[]>)((items) =>
             {
                 // Get the filename from the selected item
                 string searchPhrase = string.Empty;
@@ -294,6 +311,12 @@ namespace AssetInventory
                 yield return new SearchProposition(category: "Tags", label: "Package Tag...", replacement: "packagetag:", help: "Use packagetag:<name>", icon: tagIcon, color: GetCategoryColor("Tags"));
                 yield return new SearchProposition(category: "Tags", label: "File Tag...", replacement: "filetag:", help: "Use filetag:<name>", icon: tagIcon, color: GetCategoryColor("Tags"));
             }
+
+            // Preview filters
+            {
+                yield return new SearchProposition(category: "Preview", label: "Has Preview", replacement: "preview:has", icon: typeIcon, color: GetCategoryColor("Preview"));
+                yield return new SearchProposition(category: "Preview", label: "No Preview", replacement: "preview:no", icon: typeIcon, color: GetCategoryColor("Preview"));
+            }
         }
 
         private static IEnumerable<SearchColumn> FetchColumns(SearchContext context, IEnumerable<SearchItem> items)
@@ -318,6 +341,7 @@ namespace AssetInventory
                 case "length": return new Color(0.20f, 0.70f, 0.70f); // teal
                 case "size": return new Color(0.35f, 0.80f, 0.45f); // green
                 case "tags": return new Color(0.90f, 0.30f, 0.60f); // magenta-ish
+                case "preview": return new Color(0.80f, 0.50f, 0.20f); // brown-ish
             }
             return new Color(0.6f, 0.6f, 0.6f);
         }

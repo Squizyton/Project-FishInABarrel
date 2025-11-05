@@ -177,7 +177,7 @@ namespace AssetInventory
                     if (finalType == StepParameter.ParamType.Int) curIndex = finalOptions.FindIndex(o => o.Item2.intValue == step.Values[i].intValue);
 
                     int newIndex = EditorGUI.Popup(new Rect(rect.x + offset + 55, rect.y + 2, 180, EditorGUIUtility.singleLineHeight),
-                        curIndex, finalOptions.Select(o => o.Item1).ToArray());
+                        curIndex, finalOptions.Select(o => o.Item1.Replace("/", "\\")).ToArray());
 
                     if (newIndex != curIndex)
                     {

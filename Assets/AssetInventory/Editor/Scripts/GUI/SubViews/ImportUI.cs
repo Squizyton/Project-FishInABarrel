@@ -27,6 +27,9 @@ namespace AssetInventory
         {
             267512, // Mighty Maps
             185959, // Task Atlas
+            307257, // DevTasks - Offline Project Manager
+            291626, // DevTrails - Developer Statistics Made Easy
+            277112, // Clipper Pro - The Ultimate Clipboard
         };
 
         private List<AssetInfo> _assets;
@@ -305,7 +308,10 @@ namespace AssetInventory
                         switch (state.state)
                         {
                             case AssetDownloader.State.Unavailable:
-                                if (info.PackageDownloader.IsDownloadSupported() && GUILayout.Button("Download", GUILayout.Width(80))) info.PackageDownloader.Download();
+                                if (info.PackageDownloader.IsDownloadSupported() && GUILayout.Button("Download", GUILayout.Width(80)))
+                                {
+                                    info.PackageDownloader.Download(true);
+                                }
                                 break;
 
                             case AssetDownloader.State.Downloading:

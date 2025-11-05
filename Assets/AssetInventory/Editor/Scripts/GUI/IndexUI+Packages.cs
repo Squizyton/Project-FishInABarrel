@@ -271,22 +271,28 @@ namespace AssetInventory
                         case AssetDownloader.State.Downloading:
                             GUILayout.BeginHorizontal();
                             UIStyles.DrawProgressBar(state.progress, $"{EditorUtility.FormatBytes(state.bytesDownloaded)}");
-                            if (GUILayout.Button(EditorGUIUtility.IconContent("d_PauseButton On", "|Pause"), GUILayout.ExpandWidth(false))) root.PackageDownloader.PauseDownload(false);
-                            if (GUILayout.Button(EditorGUIUtility.IconContent("d_PreMatQuad", "|Abort"), GUILayout.ExpandWidth(false))) root.PackageDownloader.PauseDownload(true);
+                            if (GUILayout.Button(EditorGUIUtility.IconContent("d_PauseButton On", "|Pause"), GUILayout.ExpandWidth(false)))
+                            {
+                                root.PackageDownloader.PauseDownload(false);
+                            }
+                            if (GUILayout.Button(EditorGUIUtility.IconContent("d_PreMatQuad", "|Abort"), GUILayout.ExpandWidth(false)))
+                            {
+                                root.PackageDownloader.PauseDownload(true);
+                            }
                             GUILayout.EndHorizontal();
                             break;
 
                         case AssetDownloader.State.Unavailable:
                             if (root.PackageDownloader.IsDownloadSupported() && GUILayout.Button("Download", UIStyles.mainButton))
                             {
-                                root.PackageDownloader.Download();
+                                root.PackageDownloader.Download(false);
                             }
                             break;
 
                         case AssetDownloader.State.Paused:
                             if (root.PackageDownloader.IsDownloadSupported() && GUILayout.Button("Resume Download" + (root.PackageSize > 0 ? $" ({EditorUtility.FormatBytes(root.PackageSize - root.PackageDownloader.GetState().bytesDownloaded)})" : ""), UIStyles.mainButton))
                             {
-                                root.PackageDownloader.Download();
+                                root.PackageDownloader.Download(false);
                             }
                             break;
 
@@ -295,7 +301,7 @@ namespace AssetInventory
                             {
                                 root.WasOutdated = true;
                                 root.PackageDownloader.SetAsset(root);
-                                root.PackageDownloader.Download();
+                                root.PackageDownloader.Download(false);
                             }
                             break;
 
@@ -305,7 +311,7 @@ namespace AssetInventory
                                 root.PackageDownloader.SetAsset(root);
                                 if (root.PackageDownloader.IsDownloadSupported() && GUILayout.Button("Download", UIStyles.mainButton))
                                 {
-                                    root.PackageDownloader.Download();
+                                    root.PackageDownloader.Download(false);
                                 }
                             }
                             break;
@@ -694,7 +700,10 @@ namespace AssetInventory
             if (info.GetPurchaseDate().Year > 1) UIBlock("package.purchasedate", () => GUILabelWithText("Purchased", info.GetPurchaseDate().ToString("ddd, MMM d yyyy")));
             if (info.LastRelease.Year > 1)
             {
-                UIBlock("package.lastupdate", () => GUILabelWithText("Last Update", info.LastRelease.ToString("ddd, MMM d yyyy") + (!string.IsNullOrEmpty(info.LatestVersion) ? $" ({info.LatestVersion})" : string.Empty)));
+                UIBlock("package.lastupdate", () => GUILabelWithText("Last Update",
+                    info.LastRelease.ToString("ddd, MMM d yyyy") + (!string.IsNullOrEmpty(info.LatestVersion) ? $" ({info.LatestVersion})" : string.Empty),
+                    95,
+                    info.LastUpdate.Year > 1 ? info.LastUpdate.ToString("ddd, MMM d yyyy") : string.Empty));
             }
             else if (!string.IsNullOrEmpty(info.LatestVersion))
             {
@@ -1326,72 +1335,19 @@ namespace AssetInventory
                             }
                         });
                     }
-                    if (info.AssetSource != Asset.Source.RegistryPackage && info.AssetSource != Asset.Source.AssetManager)
+                    UIBlock("package.actions.delete", () =>
                     {
-                        if (info.ParentId <= 0 && info.IsDownloaded && info.SafeName != Asset.NONE)
+                        if (GUILayout.Button(UIStyles.Content("Delete Package...", "Delete the package from the database and optionally the file system.")))
                         {
-                            UIBlock("package.actions.delete", () =>
+                            PackageDeletionUI deletionUI = PackageDeletionUI.ShowWindow();
+                            deletionUI.Init(info, () =>
                             {
-                                if (GUILayout.Button(UIStyles.Content("Delete Package...", "Delete the package from the database and optionally the file system.")))
-                                {
-                                    int removeType = EditorUtility.DisplayDialogComplex("Delete Package", "Do you also want to remove the file from the Unity cache? If not the package will reappear after the next index update.", "Remove only from Database", "Cancel", "Remove also from File System");
-                                    if (removeType != 1)
-                                    {
-                                        AI.RemovePackage(info, removeType == 2);
-                                        _selectedTreeAsset = null;
-                                        _requireLookupUpdate = ChangeImpact.Write;
-                                        _requireAssetTreeRebuild = true;
-                                    }
-                                }
-                            }, showDelete);
-                        }
-                        else if (info.ParentId > 0 || !info.IsDownloaded || info.SafeName == Asset.NONE)
-                        {
-                            UIBlock("package.actions.delete", () =>
-                            {
-                                if (GUILayout.Button(UIStyles.Content("Delete Package", "Delete the package from the database.")))
-                                {
-                                    AI.RemovePackage(info, false);
-                                    _selectedTreeAsset = null;
-                                    _requireLookupUpdate = ChangeImpact.Write;
-                                    _requireAssetTreeRebuild = true;
-                                }
-                            });
-                        }
-
-                        if (info.ParentId <= 0 && info.IsDownloaded && info.AssetSource != Asset.Source.Directory)
-                        {
-                            UIBlock("package.actions.deletefile", () =>
-                            {
-                                if (GUILayout.Button(UIStyles.Content("Delete Package from File System", "Delete the package only from the cache in the file system and leave index intact.")))
-                                {
-                                    if (File.Exists(info.GetLocation(true)))
-                                    {
-                                        File.Delete(info.GetLocation(true));
-                                        info.SetLocation(null);
-                                        info.PackageSize = 0;
-                                        info.CurrentState = Asset.State.New;
-                                        info.Refresh();
-                                        DBAdapter.DB.Execute("update Asset set Location=null, PackageSize=0, CurrentState=? where Id=?", info.AssetId, Asset.State.New);
-                                        _requireAssetTreeRebuild = true;
-                                    }
-                                }
-                            });
-                        }
-                    }
-                    else
-                    {
-                        UIBlock("package.actions.delete", () =>
-                        {
-                            if (GUILayout.Button(UIStyles.Content("Delete Package From Index", "Delete the package from the database.")))
-                            {
-                                AI.RemovePackage(info, false);
                                 _selectedTreeAsset = null;
                                 _requireLookupUpdate = ChangeImpact.Write;
                                 _requireAssetTreeRebuild = true;
-                            }
-                        });
-                    }
+                            });
+                        }
+                    }, showDelete);
                 }
                 EditorGUI.EndDisabledGroup();
 
@@ -1670,7 +1626,15 @@ namespace AssetInventory
             GUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
             if (_selectedMedia < 0 || _selectedMedia >= info.Media.Count) _selectedMedia = 0;
-            GUILayout.Box(info.Media[_selectedMedia].Texture, UIStyles.centerLabel, GUILayout.MaxWidth(GetInspectorWidth() - 20), GUILayout.MaxHeight(AI.Config.mediaHeight / (AI.Config.expandPackageDetails ? 1f : 2f)));
+
+            // Load full media on-demand
+            AssetMedia selectedMedia = info.Media[_selectedMedia];
+            if (selectedMedia.Texture == null && !selectedMedia.IsDownloading)
+            {
+                Task _ = AI.LoadFullMediaOnDemand(info, selectedMedia);
+            }
+
+            GUILayout.Box(selectedMedia.Texture, UIStyles.centerLabel, GUILayout.MaxWidth(GetInspectorWidth() - 20), GUILayout.MaxHeight(AI.Config.mediaHeight / (AI.Config.expandPackageDetails ? 1f : 2f)));
             if (Event.current.type == EventType.Repaint) _mediaRect = GUILayoutUtility.GetLastRect();
             if (Event.current.type == EventType.MouseDown && Event.current.button == 0)
             {
@@ -1689,6 +1653,8 @@ namespace AssetInventory
             for (int i = 0; i < info.Media.Count; i++)
             {
                 AssetMedia media = info.Media[i];
+                // Thumbnails are always loaded, full media loaded on-demand
+                // Use thumbnail preferably, fall back to full media if already loaded
                 Texture2D texture = media.ThumbnailTexture != null ? media.ThumbnailTexture : media.Texture;
                 if (GUILayout.Button(
                         UIStyles.Content(texture == null ? "Loading..." : string.Empty, texture),
@@ -1697,8 +1663,16 @@ namespace AssetInventory
                 {
                     if (media.Type == "youtube" || media.Type == "vimeo" || media.Type == "sketchfab" || media.Type == "soundcloud" || media.Type == "mixcloud" || media.Type == "attachment_video" || media.Type == "attachment_audio")
                     {
-                        // open URL in browser
-                        Application.OpenURL(media.GetUrl());
+                        if (Event.current.button == 0)
+                        {
+                            // open URL in browser
+                            Application.OpenURL(media.GetUrl());
+                        }
+                        else
+                        {
+                            // copy URL to clipboard
+                            EditorGUIUtility.systemCopyBuffer = media.GetUrl();
+                        }
                     }
                     else
                     {
@@ -1997,6 +1971,15 @@ namespace AssetInventory
                     AI.Config.currency = EditorGUILayout.Popup(AI.Config.currency, _currencyOptions, GUILayout.Width(70));
                     GUILayout.EndHorizontal();
 
+                    EditorGUI.BeginChangeCheck();
+                    GUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField(UIStyles.Content("Search In Description", "Will also search for the entered search text in package descriptions in addition to the name."), EditorStyles.boldLabel, GUILayout.Width(width));
+                    AI.Config.searchPackageDescriptions = EditorGUILayout.Toggle(AI.Config.searchPackageDescriptions);
+                    GUILayout.EndHorizontal();
+
+                    EditorGUILayout.Space();
+                    EditorGUILayout.LabelField("UI", EditorStyles.largeLabel);
+
                     GUILayout.BeginHorizontal();
                     EditorGUILayout.LabelField(UIStyles.Content("Details when Compact", "Will show package details like media, description, dependencies etc. also when the inspector is not expanded."), EditorStyles.boldLabel, GUILayout.Width(width));
                     AI.Config.alwaysShowPackageDetails = EditorGUILayout.Toggle(AI.Config.alwaysShowPackageDetails);
@@ -2008,11 +1991,53 @@ namespace AssetInventory
                     GUILayout.EndHorizontal();
                     if (EditorGUI.EndChangeCheck()) AI.SaveConfig();
 
-                    EditorGUI.BeginChangeCheck();
-                    GUILayout.BeginHorizontal();
-                    EditorGUILayout.LabelField(UIStyles.Content("Search In Description", "Will also search for the entered search text in package descriptions in addition to the name."), EditorStyles.boldLabel, GUILayout.Width(width));
-                    AI.Config.searchPackageDescriptions = EditorGUILayout.Toggle(AI.Config.searchPackageDescriptions);
-                    GUILayout.EndHorizontal();
+                    if (ShowAdvanced())
+                    {
+                        GUILayout.BeginHorizontal();
+                        EditorGUILayout.LabelField(UIStyles.Content("Row Height", "Row height when no media column is visible."), EditorStyles.boldLabel, GUILayout.Width(width));
+                        AI.Config.rowHeight = EditorGUILayout.DelayedIntField(AI.Config.rowHeight, GUILayout.Width(50));
+                        EditorGUILayout.LabelField("px", EditorStyles.miniLabel);
+                        GUILayout.EndHorizontal();
+
+                        GUILayout.BeginHorizontal();
+                        EditorGUILayout.LabelField(UIStyles.Content("Row Height with Media", "Row height when media column is visible."), EditorStyles.boldLabel, GUILayout.Width(width));
+                        AI.Config.rowHeightMedia = EditorGUILayout.DelayedIntField(AI.Config.rowHeightMedia, GUILayout.Width(50));
+                        EditorGUILayout.LabelField("px", EditorStyles.miniLabel);
+                        GUILayout.EndHorizontal();
+
+                        EditorGUILayout.Space();
+
+                        GUILayout.BeginHorizontal();
+                        EditorGUILayout.LabelField(UIStyles.Content("Maintain Media Aspect", "Will render media images with the correct aspect ratio and not squashed."), EditorStyles.boldLabel, GUILayout.Width(width));
+                        AI.Config.mediaMaintainAspect = EditorGUILayout.Toggle(AI.Config.mediaMaintainAspect);
+                        GUILayout.EndHorizontal();
+
+                        GUILayout.BeginHorizontal();
+                        EditorGUILayout.LabelField(UIStyles.Content("Align Media Width", "Will make all media images the same width for a calmer UI, not utilizing the full row height potentially."), EditorStyles.boldLabel, GUILayout.Width(width));
+                        AI.Config.mediaSameWidth = EditorGUILayout.Toggle(AI.Config.mediaSameWidth);
+                        GUILayout.EndHorizontal();
+
+                        if (!AI.Config.mediaSameWidth)
+                        {
+                            GUILayout.BeginHorizontal();
+                            EditorGUILayout.LabelField(UIStyles.Content("Media Height", "Space a media image should occupy vertically in percent."), EditorStyles.boldLabel, GUILayout.Width(width));
+                            AI.Config.mediaYFillRatio = EditorGUILayout.DelayedIntField(AI.Config.mediaYFillRatio, GUILayout.Width(50));
+                            EditorGUILayout.LabelField("%", EditorStyles.miniLabel);
+                            GUILayout.EndHorizontal();
+                        }
+
+                        GUILayout.BeginHorizontal();
+                        EditorGUILayout.LabelField(UIStyles.Content("Media Spacing", "Horizontal space of media images."), EditorStyles.boldLabel, GUILayout.Width(width));
+                        AI.Config.mediaXSpacing = EditorGUILayout.DelayedIntField(AI.Config.mediaXSpacing, GUILayout.Width(50));
+                        EditorGUILayout.LabelField("px", EditorStyles.miniLabel);
+                        GUILayout.EndHorizontal();
+
+                        GUILayout.BeginHorizontal();
+                        EditorGUILayout.LabelField(UIStyles.Content("Media Corner Radius", "Roundness of corners of media images."), EditorStyles.boldLabel, GUILayout.Width(width));
+                        AI.Config.mediaCornerRadius = EditorGUILayout.DelayedIntField(AI.Config.mediaCornerRadius, GUILayout.Width(50));
+                        EditorGUILayout.LabelField("px", EditorStyles.miniLabel);
+                        GUILayout.EndHorizontal();
+                    }
 
                     if (EditorGUI.EndChangeCheck())
                     {
@@ -2398,7 +2423,7 @@ namespace AssetInventory
                 {
                     foreach (AssetInfo info in bulkAssets.Where(a => !a.IsDownloaded))
                     {
-                        info.PackageDownloader.Download();
+                        info.PackageDownloader.Download(false);
                     }
                 }
                 GUILayout.EndHorizontal();
@@ -2414,7 +2439,7 @@ namespace AssetInventory
                         if (info.PackageDownloader.GetState().state == AssetDownloader.State.UpdateAvailable)
                         {
                             info.WasOutdated = true;
-                            info.PackageDownloader.Download();
+                            info.PackageDownloader.Download(false);
                         }
                     }
                 }
@@ -2922,6 +2947,7 @@ namespace AssetInventory
             }
 
             _textureLoading2?.Cancel();
+            _textureLoading2?.Dispose();
             _textureLoading2 = new CancellationTokenSource();
 
             if (AI.Config.packageViewMode == 0)
@@ -3443,8 +3469,10 @@ namespace AssetInventory
         private void LoadMediaOnDemand(AssetInfo info)
         {
             if (info == null) return;
+            if (info.IsMediaLoading()) return;
+            if (info.AllMedia != null) return; // already loaded
 
-            if (!info.IsMediaLoading() && (AI.Config.expandPackageDetails || AI.Config.alwaysShowPackageDetails))
+            if (AI.Config.expandPackageDetails || AI.Config.alwaysShowPackageDetails)
             {
                 // clear all existing media to conserve memory
                 if (AI.Config.packageViewMode == 0)

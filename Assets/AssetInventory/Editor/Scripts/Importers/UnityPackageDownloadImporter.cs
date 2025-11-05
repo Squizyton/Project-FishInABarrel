@@ -34,7 +34,7 @@ namespace AssetInventory
                 AssetInfo nextInfo = i < packages.Count - 1 ? packages[i + 1] : null;
                 if (nextInfo != null && CanDownload(nextInfo) && !nextInfo.IsDownloading())
                 {
-                    nextInfo.PackageDownloader.Download();
+                    nextInfo.PackageDownloader.Download(true);
                 }
 
                 yield return DownloadAsset(info);

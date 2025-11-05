@@ -20,7 +20,7 @@ namespace AssetInventory
             GUILayout.BeginVertical(GUILayout.MaxWidth(520));
             GUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
-            EditorGUILayout.LabelField("A tool by Impossible Robert", UIStyles.centerHeading, GUILayout.Width(300), GUILayout.Height(50));
+            EditorGUILayout.LabelField("A tool by Impossible Robert", UIStyles.centerHeading, GUILayout.Width(350), GUILayout.Height(50));
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();

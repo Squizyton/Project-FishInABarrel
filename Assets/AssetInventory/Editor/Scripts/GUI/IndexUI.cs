@@ -178,8 +178,8 @@ namespace AssetInventory
             _requireSearchUpdate = true;
             _requireAssetTreeRebuild = true;
 
-            CheckForToolUpdates();
-            CheckForAssetUpdates();
+            _ = CheckForToolUpdates();
+            _ = CheckForAssetUpdates();
         }
 
         private void OnEnable()
@@ -270,6 +270,12 @@ namespace AssetInventory
             _textureLoading?.Cancel();
             _textureLoading2?.Cancel();
             _textureLoading3?.Cancel();
+
+            // Dispose CancellationTokenSource objects to prevent memory leaks
+            _textureLoading?.Dispose();
+            _textureLoading2?.Dispose();
+            _textureLoading3?.Dispose();
+            _extraction?.Dispose();
         }
 
         private void UpdateLoop()
@@ -408,7 +414,7 @@ namespace AssetInventory
             _importStructureOptions = new[] {"All Files Flat in Target Folder", "Keep Original Folder Structure"};
             _assetCacheLocationOptions = new[] {"Automatic", "Custom Folder"};
             _currencyOptions = new[] {"EUR", "USD", "CNY"};
-            _logOptions = new[] {"Media Downloads", "Image Resizing", "Audio Parsing", "Package Parsing", "Custom Actions"};
+            _logOptions = new[] {"Media Downloads", "Image Resizing", "Audio Parsing", "Package Parsing", "Custom Actions", "Preview Creation"};
             _blipOptions = new[] {"Small (1Gb)", "Large (1.8Gb)"};
             _aiBackendOptions = new[] {"Blip", "Ollama"};
             _imageTypeOptions = new List<string> {"-all-", string.Empty}.Concat(TextureNameSuggester.suffixPatterns.Keys.Select(StringUtils.CamelCaseToWords)).ToArray();
@@ -872,7 +878,7 @@ namespace AssetInventory
             _extraction = new CancellationTokenSource();
         }
 
-        private async void CheckForToolUpdates()
+        private async Task CheckForToolUpdates()
         {
             _updateAvailable = false;
 
@@ -885,18 +891,39 @@ namespace AssetInventory
             _updateAvailable = new SemVer(_onlineInfo.version.name) > new SemVer(AI.VERSION);
         }
 
-        private async void CheckForAssetUpdates()
+        private async Task CheckForAssetUpdates()
         {
-            if (AI.Config.lastPurchasesUpdate != DateTime.MinValue && (DateTime.Now - AI.Config.lastPurchasesUpdate).TotalHours < AI.Config.purchasesRefreshPeriod)
+            await Task.Delay(2500); // let remainder of window initialize first
+
+            if (AI.Config.autoRefreshPurchases)
             {
-                return; // no need to check again
+                if (AI.Config.lastPurchasesUpdate != DateTime.MinValue && (DateTime.Now - AI.Config.lastPurchasesUpdate).TotalHours < AI.Config.purchasesRefreshPeriod)
+                {
+                    // no need to check again
+                }
+                else
+                {
+                    AI.Config.lastPurchasesUpdate = DateTime.Now;
+                    AI.SaveConfig();
+
+                    await AI.Actions.RunAction(ActionHandler.ACTION_ASSET_STORE_PURCHASES);
+                }
             }
 
-            AI.Config.lastPurchasesUpdate = DateTime.Now;
-            AI.SaveConfig();
+            if (AI.Config.autoRefreshMetadata)
+            {
+                if (AI.Config.lastMetadataUpdate != DateTime.MinValue && (DateTime.Now - AI.Config.lastMetadataUpdate).TotalHours < AI.Config.metadataTimeout)
+                {
+                    // no need to check again
+                }
+                else
+                {
+                    AI.Config.lastMetadataUpdate = DateTime.Now;
+                    AI.SaveConfig();
 
-            await Task.Delay(2500); // let remainder of window initialize first
-            await AI.Actions.RunAction(ActionHandler.ACTION_ASSET_STORE_PURCHASES);
+                    await AI.Actions.RunAction(ActionHandler.ACTION_ASSET_STORE_DETAILS);
+                }
+            }
         }
 
         private void CreateDebugReport()

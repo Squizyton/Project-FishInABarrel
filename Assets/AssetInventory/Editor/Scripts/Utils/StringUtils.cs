@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Text.RegularExpressions;
 using UnityEngine;
 
@@ -17,6 +16,17 @@ namespace AssetInventory
         private static readonly Regex CAMEL_CASE_R2 = new Regex(@"(?<= [A-Z])(?=[A-Z][a-z])", RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private static readonly Regex CAMEL_CASE_R3 = new Regex(@"(?<=[^\s])(?=[(])|(?<=[)])(?=[^\s])", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+        // Precompiled regex patterns for performance
+        private static readonly Regex ESCAPE_SQL_LIKE_PATTERN = new Regex(@"(like\s+'[^']*)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex ESCAPE_SQL_LIKE_ESCAPE_PATTERN = new Regex(@"(like\s+'[^']*')", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex STRIP_TAGS_PATTERN = new Regex("<.*?>", RegexOptions.Compiled);
+        private static readonly Regex STRIP_TAGS_WITH_CONTENT_PATTERN = new Regex("<[^>]+?>.*?</[^>]+?>", RegexOptions.Singleline | RegexOptions.Compiled);
+        private static readonly Regex STRIP_UNICODE_PATTERN = new Regex("&#.*?;", RegexOptions.Compiled);
+        private static readonly Regex NORMALIZE_LINE_BREAKS_PATTERN = new Regex(@"\r\n?|\n", RegexOptions.Compiled);
+        private static readonly Regex WHITESPACE_BEFORE_NEWLINE_PATTERN = new Regex(@"[ \t]+\n", RegexOptions.Compiled);
+        private static readonly Regex MULTIPLE_NEWLINES_PATTERN = new Regex(@"\n{3,}", RegexOptions.Compiled);
+        private static readonly Regex MULTIPLE_WHITESPACE_PATTERN = new Regex(@"\s+", RegexOptions.Compiled);
+
         public static string ExtractTokens(string input, string tokenName, List<string> tokenValues)
         {
             if (string.IsNullOrEmpty(input) || string.IsNullOrEmpty(tokenName)) return input;
@@ -31,20 +41,20 @@ namespace AssetInventory
             string result = Regex.Replace(input, pattern, match =>
             {
                 string value = match.Groups[1].Value;
-                
+
                 // Skip empty tokens (don't add them to the values list)
                 if (string.IsNullOrEmpty(value))
                 {
                     return string.Empty;
                 }
-                
+
                 // Remove quotes if present (for escaped tokens)
-                if ((value.StartsWith("'") && value.EndsWith("'")) || 
+                if ((value.StartsWith("'") && value.EndsWith("'")) ||
                     (value.StartsWith("\"") && value.EndsWith("\"")))
                 {
                     value = value.Substring(1, value.Length - 2);
                 }
-                
+
                 tokenValues.Add(value);
 
                 // Return an empty string to remove this token from the original text.
@@ -52,7 +62,7 @@ namespace AssetInventory
             });
 
             // remove any excess whitespace created by token removal
-            result = Regex.Replace(result, @"\s+", " ").Trim();
+            result = MULTIPLE_WHITESPACE_PATTERN.Replace(result, " ").Trim();
 
             return result;
         }
@@ -87,22 +97,79 @@ namespace AssetInventory
             return s == 1 ? "1 second ago" : s.ToString(CultureInfo.InvariantCulture) + " seconds ago";
         }
 
+        /// <summary>
+        /// Formats a duration given in seconds into a human-readable string.
+        /// </summary>
+        /// <param name="totalSeconds">Total duration in seconds (e.g., from AudioClip.length)</param>
+        /// <param name="maxComponents">Maximum number of time components to display (e.g., 2 = "1 Hour 30 Min"). Default is 2, set to -1 for all.</param>
+        /// <returns>Formatted time string like "1 Hour 30 Min", "5 Min 42 Sec", or "15 Sec"</returns>
+        public static string FormatDuration(float totalSeconds, int maxComponents = 2)
+        {
+            if (totalSeconds < 0) totalSeconds = 0;
+
+            // For durations < 10 seconds, show fractions
+            bool showFractions = totalSeconds < 10;
+
+            int days = (int)(totalSeconds / 86400);
+            totalSeconds -= days * 86400;
+
+            int hours = (int)(totalSeconds / 3600);
+            totalSeconds -= hours * 3600;
+
+            int minutes = (int)(totalSeconds / 60);
+            totalSeconds -= minutes * 60;
+
+            int seconds = (int)totalSeconds;
+            float fractionalSeconds = totalSeconds;
+
+            List<string> parts = new List<string>();
+
+            if (days > 0)
+            {
+                parts.Add(days.ToString(CultureInfo.InvariantCulture) + " Day" + (days == 1 ? "" : "s"));
+            }
+            if (hours > 0)
+            {
+                parts.Add(hours.ToString(CultureInfo.InvariantCulture) + " Hour" + (hours == 1 ? "" : "s"));
+            }
+            if (minutes > 0)
+            {
+                parts.Add(minutes.ToString(CultureInfo.InvariantCulture) + " Min");
+            }
+            if (seconds > 0 || parts.Count == 0) // Always show seconds if it's the only component or if there's time left
+            {
+                if (showFractions && parts.Count == 0)
+                {
+                    // Show one decimal place for durations < 10 seconds
+                    parts.Add(fractionalSeconds.ToString("0.0", CultureInfo.InvariantCulture) + " Sec");
+                }
+                else
+                {
+                    parts.Add(seconds.ToString(CultureInfo.InvariantCulture) + " Sec");
+                }
+            }
+
+            // Limit to maxComponents if specified
+            if (maxComponents > 0 && parts.Count > maxComponents)
+            {
+                parts = parts.GetRange(0, maxComponents);
+            }
+
+            return string.Join(" ", parts);
+        }
+
         public static string EscapeSQL(string input)
         {
-            // Pattern to find 'like' clauses
-            string pattern = @"(like\s+'[^']*)";
-            string escapePattern = @"(like\s+'[^']*')";
-
             // Replace underscores with escaped underscores inside 'like' clauses
-            input = Regex.Replace(input, pattern, m =>
+            input = ESCAPE_SQL_LIKE_PATTERN.Replace(input, m =>
             {
                 string likeClause = m.Groups[1].Value;
                 likeClause = likeClause.Replace("_", "\\_");
                 return likeClause;
-            }, RegexOptions.IgnoreCase);
+            });
 
             // Add ESCAPE '\' behind each 'like' clause
-            input = Regex.Replace(input, escapePattern, "$1 ESCAPE '\\'", RegexOptions.IgnoreCase);
+            input = ESCAPE_SQL_LIKE_ESCAPE_PATTERN.Replace(input, "$1 ESCAPE '\\'");
 
             return input;
         }
@@ -198,21 +265,26 @@ namespace AssetInventory
 
         public static bool IsUnicode(this string input)
         {
-            return input.ToCharArray().Any(c => c > 255);
+            // Iterate directly over string without allocating char array
+            foreach (char c in input)
+            {
+                if (c > 255) return true;
+            }
+            return false;
         }
 
         public static string StripTags(string input, bool removeContentBetweenTags = false)
         {
             if (removeContentBetweenTags)
             {
-                return Regex.Replace(input, "<[^>]+?>.*?</[^>]+?>", string.Empty, RegexOptions.Singleline);
+                return STRIP_TAGS_WITH_CONTENT_PATTERN.Replace(input, string.Empty);
             }
-            return Regex.Replace(input, "<.*?>", string.Empty);
+            return STRIP_TAGS_PATTERN.Replace(input, string.Empty);
         }
 
         public static string StripUnicode(string input)
         {
-            return Regex.Replace(input, "&#.*?;", string.Empty);
+            return STRIP_UNICODE_PATTERN.Replace(input, string.Empty);
         }
 
         public static string RemoveTrailing(this string source, string text)
@@ -223,8 +295,19 @@ namespace AssetInventory
                 return null;
             }
 
-            while (source.EndsWith(text)) source = source.Substring(0, source.Length - text.Length);
-            return source;
+            // Handle empty text case - return source unchanged
+            if (string.IsNullOrEmpty(text)) return source;
+
+            // Calculate final length once to avoid multiple substring allocations
+            int textLength = text.Length;
+            int endIndex = source.Length;
+
+            while (endIndex >= textLength && source.Substring(endIndex - textLength, textLength) == text)
+            {
+                endIndex -= textLength;
+            }
+
+            return endIndex == source.Length ? source : source.Substring(0, endIndex);
         }
 
         public static string ToLowercaseFirstLetter(this string input)
@@ -242,7 +325,7 @@ namespace AssetInventory
             string result = input;
 
             // Normalize line breaks to \n
-            result = Regex.Replace(result, @"\r\n?|\n", "\n");
+            result = NORMALIZE_LINE_BREAKS_PATTERN.Replace(result, "\n");
 
             // Translate some HTML tags
             result = result.Replace("<br>", "\n");
@@ -258,10 +341,10 @@ namespace AssetInventory
             result = StripUnicode(StripTags(result));
 
             // Remove whitespace from empty lines
-            result = Regex.Replace(result, @"[ \t]+\n", "\n");
+            result = WHITESPACE_BEFORE_NEWLINE_PATTERN.Replace(result, "\n");
 
             // Ensure at max two consecutive line breaks
-            result = Regex.Replace(result, @"\n{3,}", "\n\n");
+            result = MULTIPLE_NEWLINES_PATTERN.Replace(result, "\n\n");
 
             return result.Trim();
         }
@@ -273,6 +356,31 @@ namespace AssetInventory
             if (string.IsNullOrWhiteSpace(value)) value = Environment.GetEnvironmentVariable(key, EnvironmentVariableTarget.Machine);
 
             return value;
+        }
+
+        /// <summary>
+        /// Formats bytes into a human-readable string (e.g., "1.5 MB", "256 KB").
+        /// Thread-safe alternative to EditorUtility.FormatBytes.
+        /// </summary>
+        /// <param name="bytes">Number of bytes to format</param>
+        /// <returns>Formatted string with appropriate unit (B, KB, MB, GB, TB)</returns>
+        public static string FormatBytes(long bytes)
+        {
+            if (bytes < 0) return "0 B";
+            
+            string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+            double len = bytes;
+            int order = 0;
+            
+            while (len >= 1024 && order < sizes.Length - 1)
+            {
+                order++;
+                len /= 1024;
+            }
+            
+            // Format with up to 1 decimal place, but drop .0
+            string formatted = len.ToString(len % 1 == 0 ? "0" : "0.0", CultureInfo.InvariantCulture);
+            return $"{formatted} {sizes[order]}";
         }
     }
 }

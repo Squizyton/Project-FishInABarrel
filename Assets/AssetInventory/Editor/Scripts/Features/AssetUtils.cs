@@ -239,7 +239,6 @@ namespace AssetInventory
             }
 
             // select appropriate audio type from extension where UNKNOWN heuristic can fail, especially for AIFF
-
             // retry with other types since some authors store especially wav files under the wrong format (e.g. ogg)
             List<AudioType> fallbackChain;
             switch (Path.GetExtension(filePath).ToLowerInvariant())
@@ -257,6 +256,10 @@ namespace AssetInventory
                     fallbackChain = new List<AudioType> {AudioType.WAV, AudioType.OGGVORBIS, AudioType.UNKNOWN, AudioType.AIFF};
                     break;
 
+                case ".mp3":
+                    fallbackChain = new List<AudioType> {AudioType.MPEG, AudioType.WAV, AudioType.UNKNOWN, AudioType.AIFF};
+                    break;
+
                 default:
                     fallbackChain = new List<AudioType> {AudioType.UNKNOWN, AudioType.OGGVORBIS, AudioType.WAV, AudioType.AIFF};
                     break;
@@ -267,7 +270,12 @@ namespace AssetInventory
             {
                 using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip(fileUri, type))
                 {
-                    ((DownloadHandlerAudioClip)uwr.downloadHandler).streamAudio = true;
+                    // Streaming is a huge performance boost, but tracker formats (MOD, IT, S3M, XM) don't support streaming
+                    bool shouldStream = type == AudioType.OGGVORBIS ||
+                        type == AudioType.MPEG ||
+                        type == AudioType.WAV ||
+                        type == AudioType.AIFF;
+                    ((DownloadHandlerAudioClip)uwr.downloadHandler).streamAudio = shouldStream;
                     uwr.timeout = AI.Config.timeout;
                     UnityWebRequestAsyncOperation request = uwr.SendWebRequest();
                     while (!request.isDone) await Task.Yield();
@@ -283,7 +291,6 @@ namespace AssetInventory
                     }
 
                     DownloadHandlerAudioClip dlHandler = (DownloadHandlerAudioClip)uwr.downloadHandler;
-                    dlHandler.streamAudio = false; // otherwise tracker files won't work
                     if (dlHandler.isDone)
                     {
                         // can fail if FMOD encounters incorrect file, will return zero-length then, error cannot be suppressed
@@ -352,7 +359,20 @@ namespace AssetInventory
                 texture = await LoadLocalTexture(file, true);
                 if (texture != null)
                 {
-                    PreviewCache[file] = texture;
+                    if (AI.Config.mediaCornerRadius > 0)
+                    {
+                        Texture2D roundedTexture = texture.WithRoundedCorners(AI.Config.mediaCornerRadius);
+                        PreviewCache[file] = roundedTexture;
+
+                        // Dispose of the original texture since we only need the rounded version
+                        Object.DestroyImmediate(texture);
+
+                        texture = roundedTexture; // Use the rounded texture for assignment below
+                    }
+                    else
+                    {
+                        PreviewCache[file] = texture;
+                    }
                 }
                 else
                 {
@@ -374,7 +394,17 @@ namespace AssetInventory
 
         public static void RemoveFromPreviewCache(string file)
         {
-            if (PreviewCache.ContainsKey(file)) PreviewCache.Remove(file);
+            PreviewCache.Remove(file);
+        }
+
+        private static void DeleteFileInsidePreviews(string file)
+        {
+            // safety check to avoid deleting "original" preview files
+            string previewFolder = AI.GetPreviewFolder();
+            if (string.IsNullOrEmpty(previewFolder)) return;
+            if (!IOUtils.ToShortPath(file).StartsWith(IOUtils.ToShortPath(previewFolder))) return;
+
+            File.Delete(file);
         }
 
         public static async Task<Texture2D> LoadLocalTexture(string file, bool useCache, int upscale = 0, bool upscaleIsMax = false)
@@ -390,18 +420,23 @@ namespace AssetInventory
 
             try
             {
-                byte[] content = await Task.Run(() => File.ReadAllBytes(file));
+                byte[] content = await Task.Run(() => IOUtils.ReadAllBytesWithShare(file));
                 if (content == null || content.Length == 0)
                 {
                     if (AI.Config.LogMediaDownloads) Debug.LogError($"Failed to read file data from '{file}'.");
-                    if (content != null && content.Length == 0) File.Delete(file); // erroneous file, clean up right away
+                    if (content != null && content.Length == 0) DeleteFileInsidePreviews(file); // erroneous file, clean up right away
                     return null;
                 }
 
                 Texture2D result = new Texture2D(2, 2);
                 if (!result.LoadImage(content))
                 {
-                    if (AI.Config.LogMediaDownloads) Debug.LogError($"Failed to load image from '{file}'. The data might be corrupted.");
+                    if (AI.Config.LogMediaDownloads) Debug.LogWarning($"Failed to load image from '{file}'. The data might be corrupted.");
+
+                    // Dispose of the failed texture to prevent memory leak
+                    Object.DestroyImmediate(result);
+                    DeleteFileInsidePreviews(file); // erroneous file, clean up right away
+
                     return null;
                 }
 
@@ -758,6 +793,34 @@ namespace AssetInventory
                 && Directory.Exists(Path.Combine(folder, "Library"))
                 && Directory.Exists(Path.Combine(folder, "Packages"))
                 && Directory.Exists(Path.Combine(folder, "ProjectSettings"));
+        }
+
+        public static bool ShouldBeBIRPCompatible(string assetName)
+        {
+            return assetName.Contains("birp", StringComparison.OrdinalIgnoreCase)
+                || assetName.Contains("standard rp", StringComparison.OrdinalIgnoreCase)
+                || assetName.Contains("bi rp", StringComparison.OrdinalIgnoreCase)
+                || assetName.Contains("built_in", StringComparison.OrdinalIgnoreCase)
+                || assetName.Contains("built-in", StringComparison.OrdinalIgnoreCase)
+                || assetName.Contains("built in", StringComparison.OrdinalIgnoreCase)
+                || assetName.Contains("build in", StringComparison.OrdinalIgnoreCase)
+                || assetName.EndsWith("buildin", StringComparison.OrdinalIgnoreCase)
+                || assetName.Contains("builtin", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool ShouldBeURPCompatible(string assetName)
+        {
+            return assetName.Contains("urp", StringComparison.OrdinalIgnoreCase)
+                || assetName.Contains("lwrp", StringComparison.OrdinalIgnoreCase)
+                || assetName.Contains("universalrp", StringComparison.OrdinalIgnoreCase)
+                || assetName.Contains("universal rp", StringComparison.OrdinalIgnoreCase)
+                || assetName.Contains("universal render", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool ShouldBeHDRPCompatible(string assetName)
+        {
+            return assetName.Contains("hdrp", StringComparison.OrdinalIgnoreCase)
+                || assetName.Contains("hd rp", StringComparison.OrdinalIgnoreCase);
         }
     }
 }
