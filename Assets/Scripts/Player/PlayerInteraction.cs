@@ -14,6 +14,7 @@ using Service_Locator;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Object = UnityEngine.Object;
 
 public class PlayerInteraction : MonoBehaviour, IService
 {
@@ -38,6 +39,9 @@ public class PlayerInteraction : MonoBehaviour, IService
     private Action interactAction;
 
 
+    private IPlayerUseable _useableItem;
+    
+    //Easy caching
     private BaseGun _currentSpawnedGun;
     private Transform _currentlyHitting;
     // Start is called once before the first execution of Update after the MonoBehaviour is create
@@ -60,23 +64,10 @@ public class PlayerInteraction : MonoBehaviour, IService
         //FeedGun(testGun);
     }
 
-    public void FeedGun(BaseGun newGun)
+
+    public void FeedUseableItem(IPlayerUseable useableItem)
     {
-        if (_currentSpawnedGun != null)
-            Destroy(_currentSpawnedGun.gameObject);
-
-
-        var spawnedGun = Instantiate(newGun, itemHolder);
-        spawnedGun.transform.SetParent(itemHolder);
-
-        spawnedGun.transform.localPosition = Vector3.zero;
-        spawnedGun.transform.localRotation = newGun.transform.localRotation;
-
-        leftClickInteraction = null;
-
-        currentGun = spawnedGun;
-        leftClickInteraction += spawnedGun.OnFire;
-        _currentSpawnedGun = spawnedGun;
+   
     }
 
 
@@ -106,6 +97,8 @@ public class PlayerInteraction : MonoBehaviour, IService
             interactAction?.Invoke();
     }
 
+    
+    //TODO:: QUick and dirty, refactor
     private void CheckForInteraction()
     {
         if (Physics.Raycast(transform.position, transform.forward, out RaycastHit hit, 5f, interactLayerMask))

@@ -83,5 +83,10 @@ namespace Guns.Guns
                 
 
         }
+        
+        public override void OnLeftClick()
+        {
+            OnFire();
+        }
     }
 }

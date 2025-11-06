@@ -12,6 +12,6 @@ public class DebugGunPedastal : MonoBehaviour, IOnInteract
     {
          ServiceLocator.Instance.Locate(out PlayerInteraction playerInteraction);
          
-         playerInteraction?.FeedGun(gunToGivePlayer);
+         playerInteraction?.FeedUseableItem(gunToGivePlayer);
     }
 }
