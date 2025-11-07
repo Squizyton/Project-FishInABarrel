@@ -11,6 +11,7 @@ using Interfaces;
 using Managers;
 using Service_Locator;
 using Tools;
+using Tools.Fishing_Rods;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -33,9 +34,12 @@ public class PlayerInteraction : MonoBehaviour, IService
 
     [Title("Debug Values")] public BaseGun testGun;
     [SerializeField,SerializeReference] private List<Ability> debugAbilities;
+    [SerializeField] private FishingRod fishingRod;
 
-
-    private Action leftClickInteraction;
+    private event Action leftClickInteraction;
+    private event Action upLeftClickInteraction;
+    private event Action rightClickInteraction;
+    private event Action upRightClickInteraction;
     private Action interactAction;
 
 
@@ -72,6 +76,11 @@ public class PlayerInteraction : MonoBehaviour, IService
     {
         if (useableItem is Tool tool)
         {
+            
+            //Unsubscribe the current tool from the events
+            _currentTool.OnDeselect();
+            
+            
             if (_currentTool != null)
             {
                 Destroy(_currentTool.gameObject);
@@ -82,20 +91,23 @@ public class PlayerInteraction : MonoBehaviour, IService
 
             go.transform.SetParent(itemHolder);
             
-            go.transform.localPosition = Vector3.zero;
+            go.transform.localPosition = tool.transform.localPosition;
             go.transform.localRotation = tool.transform.localRotation;
-
-            leftClickInteraction = go.OnLeftClick;
             
-            _currentTool = tool;
-
+            
+            _currentTool = go;
+            
+            
+            
+            //Set the 
+            _currentTool.OnSelect();
+            
+            //Subscribe to the events 
             if (tool is BaseGun gun)
             {
                 currentGun = gun;
             }
-
         }
-
     }
 
 
@@ -111,16 +123,12 @@ public class PlayerInteraction : MonoBehaviour, IService
         {
             currentEffect.OnUpdateTick(Time.deltaTime);
         }
+     
         
-        if (InputWrapper.Instance.performLeftClick.triggered)
-        {
-            Debug.Log("Left Click");
-            leftClickInteraction?.Invoke();
-        }
-
-
+        
         //Interaction ---------
         CheckForInteraction();
+        
         if (InputWrapper.Instance.performInteract.triggered)
             interactAction?.Invoke();
     }
@@ -180,7 +188,15 @@ public class PlayerInteraction : MonoBehaviour, IService
                 throw new ArgumentOutOfRangeException();
         }
     }
-    
+
+
+
+    [ContextMenu("Add Fishing Pole")]
+    public void AddFishingPole()
+    {
+        FeedUseableItem(fishingRod);
+    }
+
     public void ServiceAdded()
     {
     }

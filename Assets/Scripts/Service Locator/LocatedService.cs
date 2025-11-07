@@ -19,7 +19,6 @@ namespace Service_Locator
 
         public void OnLocate()
         {
-            Debug.LogWarning($"This Service: {transform.name} was added, by default this object is not considered a service");
         }
     }
 }

@@ -2115,11 +2115,12 @@ MonoBehaviour:
   itemHolder: {fileID: 1266146306}
   interactLayerMask:
     serializedVersion: 2
-    m_Bits: 128
+    m_Bits: 0
   currentGun: {fileID: 0}
   testGun: {fileID: 0}
   debugAbilities:
   - rid: 8011641582678966556
+  fishingRod: {fileID: 3424684104096802874, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
   references:
     version: 2
     RefIds:

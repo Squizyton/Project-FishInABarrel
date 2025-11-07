@@ -58,15 +58,14 @@ namespace Service_Locator
             
             if (foundObject != null)
             {
-                foundObject.AddComponent<LocatedService>().OnLocate();
-                _services.Add(foundObject.name, foundObject);
+                var objService = foundObject.AddComponent<LocatedService>();
+                service = foundObject;
+                AddService(objService);
+                return true;
             }
 
 
-
-
-
-
+            Debug.LogError("Couldn't find or create a service of type: " + typeof(TService).Name + "");
             return false;
         }
     }

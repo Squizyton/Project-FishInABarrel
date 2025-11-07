@@ -15,6 +15,13 @@ namespace Utilities.Utilities
         private static Dictionary<string, GameObject> staticObjectsFound = new Dictionary<string, GameObject>();
 
 
+
+
+        public static T ClearAction<T>(this Action<T> action)
+        {
+            return default;
+        }
+
         /// <summary>
         /// Returns a random value from a list.
         /// </summary>

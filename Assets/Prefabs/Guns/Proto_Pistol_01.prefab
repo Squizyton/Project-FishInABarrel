@@ -89,14 +89,14 @@ MonoBehaviour:
   bulletHoleDecal: {fileID: 0}
   enviroLayerMask:
     serializedVersion: 2
-    m_Bits: 119
+    m_Bits: 4294967295
   trailRenderer: {fileID: 5474759093100389739, guid: a800d07b6f502af87a30473e8feb817c, type: 3}
   bulletSpawnPoint: {fileID: 3117937340390434006}
   sparksParticle: {fileID: 0}
   abilities: []
   enemyLayerMask:
     serializedVersion: 2
-    m_Bits: 375
+    m_Bits: 4294967295
   anim: {fileID: 0}
   muzzleFlash: {fileID: 0}
   references:

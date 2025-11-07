@@ -13,6 +13,7 @@ namespace Input
         public InputAction performJump;
         public InputAction performMouseMovement;
         public InputAction performLeftClick;
+        public InputAction performRightClick;
         public InputAction performInteract;
         
         public override void Awake()
@@ -26,6 +27,7 @@ namespace Input
             performLeftClick = _controls.Player.LeftClick;
             performInteract = _controls.Player.Interact;
 
+            
             _controls.Enable();
         }
     }
