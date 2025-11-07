@@ -1,3 +1,4 @@
+using Service_Locator;
 using UnityEngine;
 
 public class DebugFishSpawn : MonoBehaviour, IOnInteract
@@ -7,6 +8,9 @@ public class DebugFishSpawn : MonoBehaviour, IOnInteract
     public Transform spawnPoint;
     public void OnInteract()
     {
+        
+        var test = ServiceLocator.Instance.Locate<GameManager>(out var gameManager);
+        
         for (int i = 0; i < amountToSpawn; i++)
         {
             var spawnedFish = Instantiate(fishPrefab, spawnPoint.transform.position + Random.insideUnitSphere, Quaternion.identity);

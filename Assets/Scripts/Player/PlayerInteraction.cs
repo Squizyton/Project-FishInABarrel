@@ -10,7 +10,7 @@ using Input;
 using Interfaces;
 using Managers;
 using Service_Locator;
-
+using Tools;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -39,10 +39,10 @@ public class PlayerInteraction : MonoBehaviour, IService
     private Action interactAction;
 
 
-    private IPlayerUseable _useableItem;
+    //The current tool that is being used
+    //This can be either the fishing pole or a gun or something else
+    private Tool _currentTool;
     
-    //Easy caching
-    private BaseGun _currentSpawnedGun;
     private Transform _currentlyHitting;
     // Start is called once before the first execution of Update after the MonoBehaviour is create
 
@@ -60,6 +60,9 @@ public class PlayerInteraction : MonoBehaviour, IService
 
         //Setting the current hitting transform to the player's transform for the first time 
         _currentlyHitting = transform;
+        
+        _currentEffects = new List<IEffect<IDamageable>>();
+        
         ServiceLocator.Instance.AddService(this);
         //FeedGun(testGun);
     }
@@ -67,7 +70,32 @@ public class PlayerInteraction : MonoBehaviour, IService
 
     public void FeedUseableItem(IPlayerUseable useableItem)
     {
-   
+        if (useableItem is Tool tool)
+        {
+            if (_currentTool != null)
+            {
+                Destroy(_currentTool.gameObject);
+            }
+
+            
+            Tool go = Instantiate(tool, itemHolder);
+
+            go.transform.SetParent(itemHolder);
+            
+            go.transform.localPosition = Vector3.zero;
+            go.transform.localRotation = tool.transform.localRotation;
+
+            leftClickInteraction = go.OnLeftClick;
+            
+            _currentTool = tool;
+
+            if (tool is BaseGun gun)
+            {
+                currentGun = gun;
+            }
+
+        }
+
     }
 
 
@@ -152,16 +180,13 @@ public class PlayerInteraction : MonoBehaviour, IService
                 throw new ArgumentOutOfRangeException();
         }
     }
-
-
+    
     public void ServiceAdded()
     {
     }
-
     public void RemoveService()
     {
     }
-
     public void OnLocate()
     {
     }

@@ -1723,6 +1723,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 6092101114667190048, guid: d11b411804472a5a0aad581add53533d, type: 3}
+      propertyPath: enviroLayerMask.m_Bits
+      value: 4294967295
+      objectReference: {fileID: 0}
     - target: {fileID: 7918784024997401381, guid: d11b411804472a5a0aad581add53533d, type: 3}
       propertyPath: m_Name
       value: Proto_Pistol_01

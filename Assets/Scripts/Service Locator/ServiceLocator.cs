@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Unity.VisualScripting;
 using UnityEngine;
 using Utilities.Utilities;
 
@@ -33,10 +34,11 @@ namespace Service_Locator
         /// </summary>
         /// <param name="service"></param>
         /// <typeparam name="TService"></typeparam>
-        public bool Locate<TService>(out TService service)
+        /// TODO:: Async/Await
+        public bool Locate<TService>(out TService service) where TService : Object
         {
             //Looks for the service in the dictionary
-            var foundService = _services.Values.First(i => i.GetType() == typeof(TService));
+            var foundService = _services.Values.FirstOrDefault(i => i.GetType() == typeof(TService));
 
             //Casts the service to the type we want
             service = (TService)foundService;
@@ -47,7 +49,22 @@ namespace Service_Locator
                 service1.OnLocate();
                 return true;
             }
-            else Debug.LogError("Service is not an IService");
+            
+            
+            //If we made it this far, find the object and attach LocatedService to it
+            var foundObject = FindAnyObjectByType<TService>();
+
+            Debug.Log(foundObject);
+            
+            if (foundObject != null)
+            {
+                foundObject.AddComponent<LocatedService>().OnLocate();
+                _services.Add(foundObject.name, foundObject);
+            }
+
+
+
+
 
 
             return false;

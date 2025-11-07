@@ -79,7 +79,8 @@ namespace Guns.Guns
 
         public override void OnLeftClick()
         {
-            OnFire();
+            Debug.Log("Left Click fifty");
+            this.OnFire();
         }
     }
 }
