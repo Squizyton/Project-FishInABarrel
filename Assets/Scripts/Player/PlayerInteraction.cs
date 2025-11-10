@@ -123,8 +123,6 @@ public class PlayerInteraction : MonoBehaviour, IService
         {
             currentEffect.OnUpdateTick(Time.deltaTime);
         }
-     
-        
         
         //Interaction ---------
         CheckForInteraction();

@@ -4,6 +4,7 @@ using Interfaces;
 using Structs;
 using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using Utilities.Utilities;
 
 namespace Guns.Guns
@@ -66,7 +67,7 @@ namespace Guns.Guns
             base.OnFire();
         }
         
-        public override void OnLeftClick()
+        public override void OnLeftClick(InputAction.CallbackContext ctx)
         {
             OnFire();
         }

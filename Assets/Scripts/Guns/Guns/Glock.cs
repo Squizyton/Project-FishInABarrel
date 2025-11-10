@@ -2,6 +2,7 @@ using Interfaces;
 using Structs;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using Utilities.Utilities;
 
 namespace Guns.Guns
@@ -77,7 +78,7 @@ namespace Guns.Guns
         }
 
 
-        public override void OnLeftClick()
+        public override void OnLeftClick(InputAction.CallbackContext ctx)
         {
             Debug.Log("Left Click fifty");
             this.OnFire();

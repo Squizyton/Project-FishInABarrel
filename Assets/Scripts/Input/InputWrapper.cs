@@ -1,4 +1,6 @@
+using System;
 using Player;
+using Service_Locator;
 using UnityEngine.InputSystem;
 using Utilities.Utilities;
 
@@ -7,7 +9,7 @@ namespace Input
     public class InputWrapper : SingletonBehaviour<InputWrapper>
     {
         private PlayerControls _controls;
-
+    
 
         public InputAction performMovement;
         public InputAction performJump;
@@ -15,6 +17,9 @@ namespace Input
         public InputAction performLeftClick;
         public InputAction performRightClick;
         public InputAction performInteract;
+        
+        
+        
         
         public override void Awake()
         {
@@ -29,6 +34,33 @@ namespace Input
 
             
             _controls.Enable();
+        }
+
+
+        private void Start()
+        {
+            //Locate the service
+            ServiceLocator.Instance.Locate(out PlayerMovement movement);
+            movement.OnStateChange += OnStateChange;
+        }
+
+        public void OnStateChange(int state)
+        {
+            _controls.Player.Disable();
+            _controls.Fishing.Disable();
+            
+            
+            switch(state)
+            {
+                //Walking
+                case 1:
+                    _controls.Player.Enable();
+                    break;
+                //Fishing
+                case 2:
+                    _controls.Fishing.Enable();
+                    break;
+            }
         }
     }
 }

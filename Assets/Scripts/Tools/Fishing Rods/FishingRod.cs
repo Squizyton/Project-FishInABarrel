@@ -32,6 +32,9 @@ namespace Tools.Fishing_Rods
 
         private bool _charging;
         private float _chargeAmount;
+        private bool _debug;
+
+
         private void Start()
         {
             var test = ServiceLocator.Instance.Locate<GameManager>(out var gameManager);
@@ -49,6 +52,7 @@ namespace Tools.Fishing_Rods
             if (_charging)
             {
                 _chargeAmount = Mathf.Clamp(_chargeAmount + Time.deltaTime, 0, 1);
+                Debug.Log(_chargeAmount);   
             }
         }
 
@@ -68,6 +72,16 @@ namespace Tools.Fishing_Rods
                     Mathf.Infinity))
             {
                
+                //Get the destination based on charge
+                _endPoint = Vector3.Lerp(startPoint.position, hit.point, chargeAmount);
+    
+                //SEt the y of the end point to the y of the hit point
+                _endPoint.y = hit.point.y;
+
+
+                
+                
+
             }
 
             _castedOut = true;
@@ -76,6 +90,15 @@ namespace Tools.Fishing_Rods
         private void CastIn()
         {
             Debug.Log("Cast In");
+        }
+
+        void OnDrawGizmosSelected()
+        {
+            if (!_debug) return;
+            
+            
+            Gizmos.color = Color.red;
+            Gizmos.DrawLine(startPoint.position, _endPoint);
         }
     }
 }

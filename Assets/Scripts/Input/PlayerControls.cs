@@ -221,6 +221,78 @@ namespace Input
                     ""isPartOfComposite"": false
                 }
             ]
+        },
+        {
+            ""name"": ""Fishing"",
+            ""id"": ""2ec9e3d1-8db4-4b80-a9b9-4c0aede5ab8f"",
+            ""actions"": [
+                {
+                    ""name"": ""BobberMovement"",
+                    ""type"": ""Value"",
+                    ""id"": ""21997232-23ba-46ef-9810-3ddc14ac3aa3"",
+                    ""expectedControlType"": ""Vector2"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": true
+                }
+            ],
+            ""bindings"": [
+                {
+                    ""name"": ""2D Vector"",
+                    ""id"": ""e9199062-594b-4a74-b370-02ba6fde011d"",
+                    ""path"": ""2DVector"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""BobberMovement"",
+                    ""isComposite"": true,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": ""up"",
+                    ""id"": ""982fd54b-36a3-4679-883a-bf00c94a3189"",
+                    ""path"": """",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""BobberMovement"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""down"",
+                    ""id"": ""395eaa55-abcc-43e3-87e6-e37e55e1a5bc"",
+                    ""path"": """",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""BobberMovement"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""left"",
+                    ""id"": ""cb3f5c8f-d5ea-4e7f-9346-d1953aefe6c8"",
+                    ""path"": ""<Keyboard>/a"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""BobberMovement"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""right"",
+                    ""id"": ""fd30c817-bb19-48d7-a175-5b28f78c5e90"",
+                    ""path"": ""<Keyboard>/d"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""BobberMovement"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                }
+            ]
         }
     ],
     ""controlSchemes"": []
@@ -231,11 +303,15 @@ namespace Input
             m_Player_MouseLook = m_Player.FindAction("MouseLook", throwIfNotFound: true);
             m_Player_LeftClick = m_Player.FindAction("LeftClick", throwIfNotFound: true);
             m_Player_Interact = m_Player.FindAction("Interact", throwIfNotFound: true);
+            // Fishing
+            m_Fishing = asset.FindActionMap("Fishing", throwIfNotFound: true);
+            m_Fishing_BobberMovement = m_Fishing.FindAction("BobberMovement", throwIfNotFound: true);
         }
 
         ~@PlayerControls()
         {
             UnityEngine.Debug.Assert(!m_Player.enabled, "This will cause a leak and performance issues, PlayerControls.Player.Disable() has not been called.");
+            UnityEngine.Debug.Assert(!m_Fishing.enabled, "This will cause a leak and performance issues, PlayerControls.Fishing.Disable() has not been called.");
         }
 
         /// <summary>
@@ -436,6 +512,102 @@ namespace Input
         /// Provides a new <see cref="PlayerActions" /> instance referencing this action map.
         /// </summary>
         public PlayerActions @Player => new PlayerActions(this);
+
+        // Fishing
+        private readonly InputActionMap m_Fishing;
+        private List<IFishingActions> m_FishingActionsCallbackInterfaces = new List<IFishingActions>();
+        private readonly InputAction m_Fishing_BobberMovement;
+        /// <summary>
+        /// Provides access to input actions defined in input action map "Fishing".
+        /// </summary>
+        public struct FishingActions
+        {
+            private @PlayerControls m_Wrapper;
+
+            /// <summary>
+            /// Construct a new instance of the input action map wrapper class.
+            /// </summary>
+            public FishingActions(@PlayerControls wrapper) { m_Wrapper = wrapper; }
+            /// <summary>
+            /// Provides access to the underlying input action "Fishing/BobberMovement".
+            /// </summary>
+            public InputAction @BobberMovement => m_Wrapper.m_Fishing_BobberMovement;
+            /// <summary>
+            /// Provides access to the underlying input action map instance.
+            /// </summary>
+            public InputActionMap Get() { return m_Wrapper.m_Fishing; }
+            /// <inheritdoc cref="UnityEngine.InputSystem.InputActionMap.Enable()" />
+            public void Enable() { Get().Enable(); }
+            /// <inheritdoc cref="UnityEngine.InputSystem.InputActionMap.Disable()" />
+            public void Disable() { Get().Disable(); }
+            /// <inheritdoc cref="UnityEngine.InputSystem.InputActionMap.enabled" />
+            public bool enabled => Get().enabled;
+            /// <summary>
+            /// Implicitly converts an <see ref="FishingActions" /> to an <see ref="InputActionMap" /> instance.
+            /// </summary>
+            public static implicit operator InputActionMap(FishingActions set) { return set.Get(); }
+            /// <summary>
+            /// Adds <see cref="InputAction.started"/>, <see cref="InputAction.performed"/> and <see cref="InputAction.canceled"/> callbacks provided via <param cref="instance" /> on all input actions contained in this map.
+            /// </summary>
+            /// <param name="instance">Callback instance.</param>
+            /// <remarks>
+            /// If <paramref name="instance" /> is <c>null</c> or <paramref name="instance"/> have already been added this method does nothing.
+            /// </remarks>
+            /// <seealso cref="FishingActions" />
+            public void AddCallbacks(IFishingActions instance)
+            {
+                if (instance == null || m_Wrapper.m_FishingActionsCallbackInterfaces.Contains(instance)) return;
+                m_Wrapper.m_FishingActionsCallbackInterfaces.Add(instance);
+                @BobberMovement.started += instance.OnBobberMovement;
+                @BobberMovement.performed += instance.OnBobberMovement;
+                @BobberMovement.canceled += instance.OnBobberMovement;
+            }
+
+            /// <summary>
+            /// Removes <see cref="InputAction.started"/>, <see cref="InputAction.performed"/> and <see cref="InputAction.canceled"/> callbacks provided via <param cref="instance" /> on all input actions contained in this map.
+            /// </summary>
+            /// <remarks>
+            /// Calling this method when <paramref name="instance" /> have not previously been registered has no side-effects.
+            /// </remarks>
+            /// <seealso cref="FishingActions" />
+            private void UnregisterCallbacks(IFishingActions instance)
+            {
+                @BobberMovement.started -= instance.OnBobberMovement;
+                @BobberMovement.performed -= instance.OnBobberMovement;
+                @BobberMovement.canceled -= instance.OnBobberMovement;
+            }
+
+            /// <summary>
+            /// Unregisters <param cref="instance" /> and unregisters all input action callbacks via <see cref="FishingActions.UnregisterCallbacks(IFishingActions)" />.
+            /// </summary>
+            /// <seealso cref="FishingActions.UnregisterCallbacks(IFishingActions)" />
+            public void RemoveCallbacks(IFishingActions instance)
+            {
+                if (m_Wrapper.m_FishingActionsCallbackInterfaces.Remove(instance))
+                    UnregisterCallbacks(instance);
+            }
+
+            /// <summary>
+            /// Replaces all existing callback instances and previously registered input action callbacks associated with them with callbacks provided via <param cref="instance" />.
+            /// </summary>
+            /// <remarks>
+            /// If <paramref name="instance" /> is <c>null</c>, calling this method will only unregister all existing callbacks but not register any new callbacks.
+            /// </remarks>
+            /// <seealso cref="FishingActions.AddCallbacks(IFishingActions)" />
+            /// <seealso cref="FishingActions.RemoveCallbacks(IFishingActions)" />
+            /// <seealso cref="FishingActions.UnregisterCallbacks(IFishingActions)" />
+            public void SetCallbacks(IFishingActions instance)
+            {
+                foreach (var item in m_Wrapper.m_FishingActionsCallbackInterfaces)
+                    UnregisterCallbacks(item);
+                m_Wrapper.m_FishingActionsCallbackInterfaces.Clear();
+                AddCallbacks(instance);
+            }
+        }
+        /// <summary>
+        /// Provides a new <see cref="FishingActions" /> instance referencing this action map.
+        /// </summary>
+        public FishingActions @Fishing => new FishingActions(this);
         /// <summary>
         /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "Player" which allows adding and removing callbacks.
         /// </summary>
@@ -471,6 +643,21 @@ namespace Input
             /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
             /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
             void OnInteract(InputAction.CallbackContext context);
+        }
+        /// <summary>
+        /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "Fishing" which allows adding and removing callbacks.
+        /// </summary>
+        /// <seealso cref="FishingActions.AddCallbacks(IFishingActions)" />
+        /// <seealso cref="FishingActions.RemoveCallbacks(IFishingActions)" />
+        public interface IFishingActions
+        {
+            /// <summary>
+            /// Method invoked when associated input action "BobberMovement" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+            /// </summary>
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+            void OnBobberMovement(InputAction.CallbackContext context);
         }
     }
 }

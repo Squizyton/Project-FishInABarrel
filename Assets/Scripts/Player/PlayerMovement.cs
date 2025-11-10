@@ -1,3 +1,4 @@
+using System;
 using Alchemy.Inspector;
 using Input;
 using UnityEngine;
@@ -14,6 +15,18 @@ namespace Player
         [SerializeField] private float jumpForce = 5f;
         private Rigidbody _rb;
 
+
+        public enum State
+        {
+            Idle,
+            Walking,
+            Fishing,
+        }
+
+        public State CurrentState { get; private set; }
+
+        public event Action<int> OnStateChange;
+        
         void Start()
         {
                    
@@ -51,5 +64,14 @@ namespace Player
         {
             return Physics.Raycast(transform.position, Vector3.down, 1.1f);
         }
+
+        public void ChangeState(State state)
+        {
+            CurrentState = state;
+            OnStateChange?.Invoke((int)state);
+        }
+
+
+
     }
 }

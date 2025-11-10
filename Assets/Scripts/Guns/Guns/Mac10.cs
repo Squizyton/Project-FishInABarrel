@@ -2,6 +2,7 @@ using Alchemy.Inspector;
 using Interfaces;
 using Structs;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using Utilities.Utilities;
 
 namespace Guns.Guns
@@ -84,7 +85,7 @@ namespace Guns.Guns
 
         }
         
-        public override void OnLeftClick()
+        public override void OnLeftClick(InputAction.CallbackContext ctx)
         {
             OnFire();
         }
