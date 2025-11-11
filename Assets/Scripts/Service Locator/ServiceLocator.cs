@@ -10,10 +10,10 @@ namespace Service_Locator
     {
         private readonly Dictionary<string, object> _services = new();
         
-        public void AddService(IService service)
+        public void AddService(IService service, string nameOverride = "")
         {
             //Add's the service to the dictionary
-            _services.Add(service.GetType().Name, service);
+            _services.Add((nameOverride != "") ? nameOverride : service.GetType().Name, service);
 
             service.ServiceAdded();
         }
@@ -21,6 +21,8 @@ namespace Service_Locator
 
         /// <summary>
         /// Locates a service by name.
+        /// Highly recommended to use Locate<TService>() instead.
+        /// 
         /// </summary>
         /// <param name="name"></param>
         /// <returns></returns>
@@ -60,7 +62,7 @@ namespace Service_Locator
             {
                 var objService = foundObject.AddComponent<LocatedService>();
                 service = foundObject;
-                AddService(objService);
+                AddService(objService, foundObject.name);
                 return true;
             }
 

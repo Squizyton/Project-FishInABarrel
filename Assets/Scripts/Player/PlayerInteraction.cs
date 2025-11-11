@@ -78,7 +78,7 @@ public class PlayerInteraction : MonoBehaviour, IService
         {
             
             //Unsubscribe the current tool from the events
-            _currentTool.OnDeselect();
+            _currentTool?.OnDeselect();
             
             
             if (_currentTool != null)
@@ -99,7 +99,7 @@ public class PlayerInteraction : MonoBehaviour, IService
             
             
             
-            //Set the 
+            //Set the current tool
             _currentTool.OnSelect();
             
             //Subscribe to the events 

@@ -1,9 +1,11 @@
 using Player;
 using Service_Locator;
+using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Fishing
 {
-    public class FishingSpot
+    public class FishingSpot: MonoBehaviour
     {
         private void Start()
         {
@@ -11,13 +13,11 @@ namespace Fishing
         }
 
 
-        private void StartFishing()
+        public void StartFishing()
         {
             ServiceLocator.Instance.Locate(out PlayerMovement movement);
             movement.ChangeState(PlayerMovement.State.Fishing);
-            
-            
-            //Load Fishing Scene
+            SceneManager.LoadSceneAsync("Fishing", LoadSceneMode.Additive);
         }
     }
 }
