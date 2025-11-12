@@ -35,11 +35,19 @@ public class PlayerInteraction : MonoBehaviour, IService
     [Title("Debug Values")] public BaseGun testGun;
     [SerializeField,SerializeReference] private List<Ability> debugAbilities;
     [SerializeField] private FishingRod fishingRod;
+    public FishingRod CurrentRod
+    {
+        get
+        {
+            if (_currentTool is FishingRod fishingRod)
+            {
+                return fishingRod;
+            }
 
-    private event Action leftClickInteraction;
-    private event Action upLeftClickInteraction;
-    private event Action rightClickInteraction;
-    private event Action upRightClickInteraction;
+            return null;
+        }
+    }
+
     private Action interactAction;
 
 
@@ -69,6 +77,7 @@ public class PlayerInteraction : MonoBehaviour, IService
         
         ServiceLocator.Instance.AddService(this);
         //FeedGun(testGun);
+        FeedUseableItem(fishingRod);
     }
 
 

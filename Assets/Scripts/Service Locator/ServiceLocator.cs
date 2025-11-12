@@ -55,8 +55,6 @@ namespace Service_Locator
             
             //If we made it this far, find the object and attach LocatedService to it
             var foundObject = FindAnyObjectByType<TService>();
-
-            Debug.Log(foundObject);
             
             if (foundObject != null)
             {

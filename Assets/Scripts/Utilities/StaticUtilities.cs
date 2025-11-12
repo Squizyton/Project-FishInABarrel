@@ -17,10 +17,24 @@ namespace Utilities.Utilities
 
 
 
+
+        public static float OneValueDistance(this float value1, float value2)
+        {
+            return Mathf.Abs(value1 - value2);
+        }
+
+
         public static T ClearAction<T>(this Action<T> action)
         {
             return default;
         }
+
+
+        public static Vector3 MultiplyXYZByXYZ(this Vector3 vector, Vector3 multiplier)
+        {
+            return new Vector3(vector.x * multiplier.x, vector.y * multiplier.y, vector.z * multiplier.z);
+        }
+
 
         /// <summary>
         /// Returns a random value from a list.

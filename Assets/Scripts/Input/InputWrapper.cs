@@ -19,6 +19,8 @@ namespace Input
         public InputAction performInteract;
         
         
+        //Fishing
+        public InputAction performBobberMovement;
         
         
         public override void Awake()
@@ -27,11 +29,15 @@ namespace Input
 
             _controls = new PlayerControls();
 
+            //Player
             performMovement = _controls.Player.Movement;
             performMouseMovement = _controls.Player.MouseLook;
             performLeftClick = _controls.Player.LeftClick;
             performInteract = _controls.Player.Interact;
 
+            //Fishing
+            performBobberMovement = _controls.Fishing.BobberMovement;
+            
             
             _controls.Enable();
         }

@@ -10,6 +10,9 @@ namespace Managers
         [Title("Interact ui")]
         public GameObject interactUI;
         
+        [Title("Fishing UI")]
+        [SerializeField] private GameObject fishingUI;
+        
         
         public void Start()
         {
@@ -24,6 +27,13 @@ namespace Managers
         public void InteractStatus(bool status)
         {
             interactUI.SetActive(status);            
+        }
+
+
+
+        public void FishingStatus(bool status)
+        {
+            fishingUI.SetActive(status);       
         }
 
 

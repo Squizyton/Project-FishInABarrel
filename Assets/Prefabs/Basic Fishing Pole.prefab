@@ -230,7 +230,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Tools.Fishing_Rods.FishingRod
   maxDepth: 10
-  speed: 1
+  speed: 3
   maxFish: 10
   chargeRate: 0
   bobber: {fileID: 2198538974065858594}

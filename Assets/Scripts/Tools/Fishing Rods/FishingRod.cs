@@ -15,8 +15,11 @@ namespace Tools.Fishing_Rods
     {
         [Title("Stats")]
         [SerializeField] private float maxDepth;
+        public float MaxDepth => maxDepth;
         [SerializeField] private float speed;
+        public float Speed => speed;
         [SerializeField] private float maxFish;
+        public float MaxFish => maxFish;
         [SerializeField] private float chargeRate;
         
         //Change this to a state
@@ -26,6 +29,7 @@ namespace Tools.Fishing_Rods
 
         [Title("Bobber")] 
         [SerializeField] private Bobber bobber;
+        public Bobber Bobber => bobber;
         [SerializeField] private float bobberTravelTime;
 
         [Title("Fishing Start Point")]
@@ -55,7 +59,7 @@ namespace Tools.Fishing_Rods
         public override void OnLeftClick(InputAction.CallbackContext context)
         {
             bobber.transform.parent = startPoint;
-            bobber.transform.position = Vector3.zero;
+            bobber.transform.position = startPoint.position;
             _chargeAmount = 0;
             _charging = true;
         }
