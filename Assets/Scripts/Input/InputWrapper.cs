@@ -17,7 +17,7 @@ namespace Input
         public InputAction performLeftClick;
         public InputAction performRightClick;
         public InputAction performInteract;
-        
+        public InputAction performSwitchTool;
         
         //Fishing
         public InputAction performBobberMovement;
@@ -34,7 +34,9 @@ namespace Input
             performMouseMovement = _controls.Player.MouseLook;
             performLeftClick = _controls.Player.LeftClick;
             performInteract = _controls.Player.Interact;
-
+            performSwitchTool = _controls.Player.SwitchTool;
+           
+            
             //Fishing
             performBobberMovement = _controls.Fishing.BobberMovement;
             

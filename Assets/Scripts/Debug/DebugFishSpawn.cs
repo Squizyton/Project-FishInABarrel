@@ -9,7 +9,7 @@ public class DebugFishSpawn : MonoBehaviour, IOnInteract
     public void OnInteract()
     {
         
-        var test = ServiceLocator.Instance.Locate<GameManager>(out var gameManager);
+        //var test = ServiceLocator.Instance.Locate<GameManager>(out var gameManager);
         
         for (int i = 0; i < amountToSpawn; i++)
         {

@@ -24,7 +24,7 @@ public class ShieldDamageProcessor : DamageProcessor
         
         var mutableDamage = damageData;
 
-        mutableDamage.Damage =- _amountOfShield;
+        mutableDamage.Damage -= _amountOfShield;
 
         if (damageData.Damage > 0)
             base.ProcessDamage(target, mutableDamage);

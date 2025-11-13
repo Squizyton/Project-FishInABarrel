@@ -29,12 +29,12 @@ public class PlayerInteraction : MonoBehaviour, IService
     private BaseGun currentGun;
 
 
-    [Title("Abilities")]
-    private List<IEffect<IDamageable>> _currentEffects;
+    [Title("Abilities")] private List<IEffect<IDamageable>> _currentEffects;
 
     [Title("Debug Values")] public BaseGun testGun;
-    [SerializeField,SerializeReference] private List<Ability> debugAbilities;
+    [SerializeField, SerializeReference] private List<Ability> debugAbilities;
     [SerializeField] private FishingRod fishingRod;
+
     public FishingRod CurrentRod
     {
         get
@@ -54,7 +54,7 @@ public class PlayerInteraction : MonoBehaviour, IService
     //The current tool that is being used
     //This can be either the fishing pole or a gun or something else
     private Tool _currentTool;
-    
+
     private Transform _currentlyHitting;
     // Start is called once before the first execution of Update after the MonoBehaviour is create
 
@@ -72,12 +72,8 @@ public class PlayerInteraction : MonoBehaviour, IService
 
         //Setting the current hitting transform to the player's transform for the first time 
         _currentlyHitting = transform;
-        
         _currentEffects = new List<IEffect<IDamageable>>();
-        
         ServiceLocator.Instance.AddService(this);
-        //FeedGun(testGun);
-        FeedUseableItem(fishingRod);
     }
 
 
@@ -85,32 +81,19 @@ public class PlayerInteraction : MonoBehaviour, IService
     {
         if (useableItem is Tool tool)
         {
-            
+            Debug.Log("Test");
             //Unsubscribe the current tool from the events
             _currentTool?.OnDeselect();
-            
-            
-            if (_currentTool != null)
-            {
-                Destroy(_currentTool.gameObject);
-            }
 
+            var previousTool = _currentTool;
+            previousTool?.gameObject.SetActive(false);
             
-            Tool go = Instantiate(tool, itemHolder);
+            _currentTool = tool;
+            _currentTool.gameObject.SetActive(true);
 
-            go.transform.SetParent(itemHolder);
-            
-            go.transform.localPosition = tool.transform.localPosition;
-            go.transform.localRotation = tool.transform.localRotation;
-            
-            
-            _currentTool = go;
-            
-            
-            
             //Set the current tool
             _currentTool.OnSelect();
-            
+
             //Subscribe to the events 
             if (tool is BaseGun gun)
             {
@@ -132,15 +115,15 @@ public class PlayerInteraction : MonoBehaviour, IService
         {
             currentEffect.OnUpdateTick(Time.deltaTime);
         }
-        
+
         //Interaction ---------
         CheckForInteraction();
-        
+
         if (InputWrapper.Instance.performInteract.triggered)
             interactAction?.Invoke();
     }
 
-    
+
     //TODO:: QUick and dirty, refactor
     private void CheckForInteraction()
     {
@@ -197,7 +180,6 @@ public class PlayerInteraction : MonoBehaviour, IService
     }
 
 
-
     [ContextMenu("Add Fishing Pole")]
     public void AddFishingPole()
     {
@@ -207,9 +189,11 @@ public class PlayerInteraction : MonoBehaviour, IService
     public void ServiceAdded()
     {
     }
+
     public void RemoveService()
     {
     }
+
     public void OnLocate()
     {
     }

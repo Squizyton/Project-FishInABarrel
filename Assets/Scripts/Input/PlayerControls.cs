@@ -129,6 +129,15 @@ namespace Input
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""SwitchTool"",
+                    ""type"": ""Value"",
+                    ""id"": ""cd3de402-8de8-47f1-987c-ba251c2e0e1e"",
+                    ""expectedControlType"": ""Axis"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": true
                 }
             ],
             ""bindings"": [
@@ -219,6 +228,39 @@ namespace Input
                     ""action"": ""Interact"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": ""1D Axis"",
+                    ""id"": ""73fc11b7-1d85-4147-846e-395eeb681dfb"",
+                    ""path"": ""1DAxis"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""SwitchTool"",
+                    ""isComposite"": true,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": ""negative"",
+                    ""id"": ""1567687f-029a-4fc3-bdbc-81611626ad2d"",
+                    ""path"": ""<Mouse>/scroll/up"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""SwitchTool"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""positive"",
+                    ""id"": ""b5041e6c-850b-4e26-bc12-298fd1e5903b"",
+                    ""path"": ""<Mouse>/scroll/down"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""SwitchTool"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
                 }
             ]
         },
@@ -303,6 +345,7 @@ namespace Input
             m_Player_MouseLook = m_Player.FindAction("MouseLook", throwIfNotFound: true);
             m_Player_LeftClick = m_Player.FindAction("LeftClick", throwIfNotFound: true);
             m_Player_Interact = m_Player.FindAction("Interact", throwIfNotFound: true);
+            m_Player_SwitchTool = m_Player.FindAction("SwitchTool", throwIfNotFound: true);
             // Fishing
             m_Fishing = asset.FindActionMap("Fishing", throwIfNotFound: true);
             m_Fishing_BobberMovement = m_Fishing.FindAction("BobberMovement", throwIfNotFound: true);
@@ -391,6 +434,7 @@ namespace Input
         private readonly InputAction m_Player_MouseLook;
         private readonly InputAction m_Player_LeftClick;
         private readonly InputAction m_Player_Interact;
+        private readonly InputAction m_Player_SwitchTool;
         /// <summary>
         /// Provides access to input actions defined in input action map "Player".
         /// </summary>
@@ -418,6 +462,10 @@ namespace Input
             /// Provides access to the underlying input action "Player/Interact".
             /// </summary>
             public InputAction @Interact => m_Wrapper.m_Player_Interact;
+            /// <summary>
+            /// Provides access to the underlying input action "Player/SwitchTool".
+            /// </summary>
+            public InputAction @SwitchTool => m_Wrapper.m_Player_SwitchTool;
             /// <summary>
             /// Provides access to the underlying input action map instance.
             /// </summary>
@@ -456,6 +504,9 @@ namespace Input
                 @Interact.started += instance.OnInteract;
                 @Interact.performed += instance.OnInteract;
                 @Interact.canceled += instance.OnInteract;
+                @SwitchTool.started += instance.OnSwitchTool;
+                @SwitchTool.performed += instance.OnSwitchTool;
+                @SwitchTool.canceled += instance.OnSwitchTool;
             }
 
             /// <summary>
@@ -479,6 +530,9 @@ namespace Input
                 @Interact.started -= instance.OnInteract;
                 @Interact.performed -= instance.OnInteract;
                 @Interact.canceled -= instance.OnInteract;
+                @SwitchTool.started -= instance.OnSwitchTool;
+                @SwitchTool.performed -= instance.OnSwitchTool;
+                @SwitchTool.canceled -= instance.OnSwitchTool;
             }
 
             /// <summary>
@@ -643,6 +697,13 @@ namespace Input
             /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
             /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
             void OnInteract(InputAction.CallbackContext context);
+            /// <summary>
+            /// Method invoked when associated input action "SwitchTool" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+            /// </summary>
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+            void OnSwitchTool(InputAction.CallbackContext context);
         }
         /// <summary>
         /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "Fishing" which allows adding and removing callbacks.

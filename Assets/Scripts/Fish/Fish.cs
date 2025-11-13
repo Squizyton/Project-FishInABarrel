@@ -23,8 +23,10 @@ public class Fish : MonoBehaviour, IDamageable, IHittable
     private float maxHeight;
 
 
-    [Title("Multiplyer")] [ReadOnly] protected float multiplier;
+    [Title("Multiplyer")]
+    [ReadOnly] protected float multiplier;
 
+    [ReadOnly] protected int juggleComboCount;
 
     [Title("References")] private Rigidbody rb;
 
@@ -114,7 +116,8 @@ public class Fish : MonoBehaviour, IDamageable, IHittable
         if (!_isPrimed)
             StartCoroutine(PrimeCountDown());
 
-
+        juggleComboCount++;
+        
         //Spawn blood particles
         var blood = Instantiate(bloodParticles, transform.position, Quaternion.identity);
         //Set the rotation to the normal
@@ -130,7 +133,7 @@ public class Fish : MonoBehaviour, IDamageable, IHittable
 
     private readonly WaitForSeconds _primeCacheWaitFor = new WaitForSeconds(0.4f);
 
-    private IEnumerator PrimeCountDown()
+    public IEnumerator PrimeCountDown()
     {
         yield return _primeCacheWaitFor;
         _isPrimed = true;
@@ -138,19 +141,25 @@ public class Fish : MonoBehaviour, IDamageable, IHittable
 
     protected virtual void OnDeath()
     {
-        GameManager.Instance.AddCash(baseCashValue, multiplier);
 
+        //If Dies it should just add 2 to the multiplier
+        //THIS COULD BE A DAMAGE PROCESSOR
+        multiplier *= 2 * juggleComboCount;
+        
+        GameManager.Instance.inventory.AddCash(baseCashValue, multiplier);
+
+        
         //Explosion particles
-
-
         Destroy(gameObject);
     }
 
     public void OnDamage(float damageData)
     {
         health -= damageData;
+        
+        
         multiplier += damageData / 10;
-
+        Debug.Log($"Damage Data {damageData} : " + multiplier);
         if (health <= 0)
         {
             OnDeath();

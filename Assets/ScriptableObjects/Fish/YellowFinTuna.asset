@@ -15,5 +15,5 @@ MonoBehaviour:
   nameOfFish: Yellow Fin Tuna
   sprite: {fileID: 0}
   inWaterFishPrefab: {fileID: 3425411042191655481, guid: 53ea485e304b604e3b25cc838de5c04e, type: 3}
-  outOfWaterFishPrefab: {fileID: 937287813416091155, guid: cb449e9e4eacf721a8eef211e2328fe1, type: 3}
+  outOfWaterFishPrefab: {fileID: 182551029604435404, guid: cb449e9e4eacf721a8eef211e2328fe1, type: 3}
   weight: 1

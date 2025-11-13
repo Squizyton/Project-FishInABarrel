@@ -9,7 +9,7 @@ public class FishData : ScriptableObject
     [Title("Prefabs")]
     
     public GameObject inWaterFishPrefab;
-    public GameObject outOfWaterFishPrefab;
+    public Fish outOfWaterFishPrefab;
     
     
     [Title("Stats")]
@@ -17,5 +17,4 @@ public class FishData : ScriptableObject
     
     
     //Movement behavior can go here
-    
 }

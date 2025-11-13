@@ -133,7 +133,7 @@ GameObject:
   - component: {fileID: 214692138}
   - component: {fileID: 214692141}
   - component: {fileID: 214692142}
-  m_Layer: 7
+  m_Layer: 8
   m_Name: Bobber
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -283,7 +283,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 643778683}
-  m_Layer: 7
+  m_Layer: 8
   m_Name: Fish Container
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -363,7 +363,7 @@ Camera:
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
-    m_Bits: 128
+    m_Bits: 256
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 8400000, guid: d346e10b3223d53cf8804d267103f560, type: 2}
   m_TargetDisplay: 0
@@ -458,7 +458,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 668036143}
-  m_Layer: 7
+  m_Layer: 8
   m_Name: Fish HookPoint
   m_TagString: Untagged
   m_Icon: {fileID: -5442936267250999957, guid: 0000000000000000d000000000000000, type: 0}
@@ -490,7 +490,7 @@ GameObject:
   m_Component:
   - component: {fileID: 788467917}
   - component: {fileID: 788467918}
-  m_Layer: 7
+  m_Layer: 8
   m_Name: Fishing MiniGame
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -541,7 +541,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1545108115}
-  m_Layer: 7
+  m_Layer: 8
   m_Name: Starting POint
   m_TagString: Untagged
   m_Icon: {fileID: 0}

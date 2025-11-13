@@ -41,20 +41,22 @@ namespace Fishing
             ServiceLocator.Instance.Locate(out UIManager uiManager);
             ServiceLocator.Instance.Locate(out PlayerInteraction player);
             ServiceLocator.Instance.Locate(out PlayerMovement playerMovement);
+
             uiManager.FishingStatus(false);
 
             
             foreach (var caughtFish in fishCollected)
             {
-                var spawnedFish = Instantiate(caughtFish.fishData.outOfWaterFishPrefab,player.CurrentRod.Bobber.transform.position + Random.insideUnitSphere + (Vector3.up * 2), Quaternion.identity);
+                Fish spawnedFish = Instantiate(caughtFish.fishData.outOfWaterFishPrefab,player.CurrentRod.Bobber.transform.position + Random.insideUnitSphere + (Vector3.up * 2), Quaternion.identity);
+                
+                //Prime the fish
+                StartCoroutine(spawnedFish.PrimeCountDown());
                 
                 if (spawnedFish.TryGetComponent(out Rigidbody rb))
                 {
                     rb.AddForce(Vector3.up * (10 / caughtFish.fishData.weight), ForceMode.Impulse);
                 }
-                
             }
-            
             playerMovement.ChangeState(PlayerMovement.State.Walking);
         }
     }
