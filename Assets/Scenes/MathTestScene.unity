@@ -369,6 +369,115 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
+--- !u!1001 &691078521
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 2582401029066084337, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: m_UseWorldSpace
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3265571243675991495, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 18.59485
+      objectReference: {fileID: 0}
+    - target: {fileID: 3265571243675991495, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3265571243675991495, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 27.551085
+      objectReference: {fileID: 0}
+    - target: {fileID: 3265571243675991495, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3265571243675991495, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3265571243675991495, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3265571243675991495, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3265571243675991495, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3265571243675991495, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3265571243675991495, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3424684104096802874, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: howManyPoints
+      value: 25
+      objectReference: {fileID: 0}
+    - target: {fileID: 3424684104096802874, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: debugLinePhysics
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3424684104096802874, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: fishingLinePrefab
+      value: 
+      objectReference: {fileID: 5998041023968131201, guid: b57f3a771d43c9183ab4a669e20e2ee8, type: 3}
+    - target: {fileID: 3684369652408623382, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: nthFrame
+      value: 0.06666667
+      objectReference: {fileID: 0}
+    - target: {fileID: 3684369652408623382, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: lerpSpeed
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 3684369652408623382, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: drawPoints
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3684369652408623382, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: iterations
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 3684369652408623382, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: savePoints
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3684369652408623382, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: processTheSticks
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3684369652408623382, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: processEveryNthFrame
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8258608712674646670, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -0.222
+      objectReference: {fileID: 0}
+    - target: {fileID: 8258608712674646670, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 4.004
+      objectReference: {fileID: 0}
+    - target: {fileID: 8532416085653838119, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
+      propertyPath: m_Name
+      value: Basic Fishing Pole
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: febe81bfcd350dce3b2286bda833e420, type: 3}
 --- !u!1 &875866718
 GameObject:
   m_ObjectHideFlags: 0
@@ -603,3 +712,4 @@ SceneRoots:
   - {fileID: 875866719}
   - {fileID: 534478127}
   - {fileID: 1832327140}
+  - {fileID: 691078521}

@@ -5,11 +5,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="91ee238a-46f3-43b5-9c0b-a3faee400528" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/Assets/Scripts/Verlet Intergration.meta" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Assets/Scripts/Verlet Intergration/VerletIntergration.cs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Assets/Scripts/Verlet Intergration/VerletIntergration.cs.meta" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/.idea.Project-FishInABarrel/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.idea.Project-FishInABarrel/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/UserSettings/EditorUserSettings.asset" beforeDir="false" afterPath="$PROJECT_DIR$/UserSettings/EditorUserSettings.asset" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Prefabs/Basic Fishing Pole.prefab" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Prefabs/Basic Fishing Pole.prefab" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Scenes/MathTestScene.unity" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scenes/MathTestScene.unity" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Scripts/Seperate/Chaikin Algorithm/Chaikin.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scripts/Seperate/Chaikin Algorithm/Chaikin.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Scripts/Tools/Fishing Rods/FishingRod.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scripts/Tools/Fishing Rods/FishingRod.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Scripts/Verlet Intergration/VerletIntergration.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scripts/Verlet Intergration/VerletIntergration.cs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -24,6 +25,7 @@
   </component>
   <component name="HighlightingSettingsPerFile">
     <setting file="file://$APPLICATION_CONFIG_DIR$/resharper-host/DecompilerCache/decompiler/db9d86d68f4243139bf3b25ce22d9ff7468c00/fb/57c67b0f/List`1.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$APPLICATION_CONFIG_DIR$/resharper-host/SourcesCache/d44b17e136d09081da1e8fd0e8c83fde60e11818b9f2442d7ed8cb733fae895e/System.Collections.Generic.cs" root0="SKIP_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Assets/Scripts/Fishing/Bobber.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Assets/Scripts/Fishing/FishingMiniGame.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Assets/Scripts/Fishing/FishingSpot.cs" root0="FORCE_HIGHLIGHTING" />
@@ -35,9 +37,9 @@
     <setting file="file://$PROJECT_DIR$/Assets/Scripts/Tools/Tool.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Assets/Scripts/Verlet Intergration/VerletIntergration.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Library/PackageCache/com.unity.inputsystem@be6c4fd0abf5/InputSystem/Actions/InputAction.cs" root0="SKIP_HIGHLIGHTING" />
-    <setting file="file:///var/mnt/ExternalDrive/Unity Projects/VerletDots/Assets/Scripts/Jobs/PointVerletJob.cs" root0="SKIP_HIGHLIGHTING" />
-    <setting file="file:///var/mnt/ExternalDrive/Unity Projects/VerletDots/Assets/Scripts/Jobs/StickPointSimulation.cs" root0="SKIP_HIGHLIGHTING" />
-    <setting file="file:///var/mnt/ExternalDrive/Unity Projects/VerletDots/Assets/Scripts/Player/PlacePoint.cs" root0="SKIP_HIGHLIGHTING" />
+    <setting file="file:///var/mnt/ExternalDrive/Unity Projects/VerletDots/Assets/Scripts/Jobs/PointVerletJob.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file:///var/mnt/ExternalDrive/Unity Projects/VerletDots/Assets/Scripts/Jobs/StickPointSimulation.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file:///var/mnt/ExternalDrive/Unity Projects/VerletDots/Assets/Scripts/Player/PlacePoint.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file:///var/mnt/ExternalDrive/Unity Projects/VerletDots/Assets/Scripts/Player/PlayerControls.cs" root0="SKIP_HIGHLIGHTING" />
   </component>
   <component name="ProjectColorInfo">{
@@ -142,6 +144,7 @@
       <workItem from="1763087510727" duration="3205000" />
       <workItem from="1763142874121" duration="8233000" />
       <workItem from="1763162505397" duration="721000" />
+      <workItem from="1763589580978" duration="15968000" />
     </task>
     <servers />
   </component>

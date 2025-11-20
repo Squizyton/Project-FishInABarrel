@@ -41,21 +41,7 @@ public class Chaikin : MonoBehaviour
 
     private void Awake()
     {
-        _transform = transform;
-        _lineRenderer = GetComponent<LineRenderer>();
-
-        _lineRenderer.positionCount = 0;
-
-        if (!updateRunTime && baseSupplyPoints != null)
-        {
-            //LINQ
-            List<Vector3> startPointsList = baseSupplyPoints.Select(point => point.position).ToList();
-
-            var processedPoints = ApplyChaikinSmoothing(ref startPointsList);
-
-            _lineRenderer.positionCount = processedPoints.Count;
-            _lineRenderer.SetPositions(processedPoints.ToArray());
-        }
+      
     }
 
 
@@ -105,7 +91,7 @@ public class Chaikin : MonoBehaviour
 
 
     //So this is the actual algorithm
-    private List<Vector3> ApplyChaikinSmoothing(ref List<Vector3> pointsArray)
+    public List<Vector3> ApplyChaikinSmoothing(ref List<Vector3> pointsArray)
     {
         var processedPoints = new List<Vector3>(pointsArray);
 
