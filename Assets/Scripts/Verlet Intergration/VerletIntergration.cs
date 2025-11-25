@@ -194,9 +194,9 @@ namespace Verlet_Intergration
             }
         }
 
-        public HashSet<Vector3> ReturnRawPoints()
+        public List<Vector3> ReturnRawPoints()
         {
-            return new HashSet<Vector3>(_points.Select(point => point.Position));
+            return new List<Vector3>(_points.Select(point => point.Position));
         }
 
         public class Point
@@ -231,7 +231,33 @@ namespace Verlet_Intergration
 
         public void UpdatePointIndex(int index, Vector3 position)
         {
-            _points[index].Position = position;
+            if(_points.Count > index && _points.Count> 0)
+                _points[index].Position = position;
+        }
+
+
+        public void UpdateGravityStrength(float newStrength)
+        {
+            GravityStrength = newStrength;
+        }
+
+        public void UpdateDrag(float newDrag)
+        {
+            drag = newDrag;
+        }
+
+        public void UpdateGravityDirection(Vector2 newDirection)
+        {
+            Gravity = newDirection;
+        }
+
+
+        public void Clear()
+        {
+            _points.Clear();
+            _sticks.Clear();
+            _time = 0;
+            
         }
 
         private void OnDrawGizmos()

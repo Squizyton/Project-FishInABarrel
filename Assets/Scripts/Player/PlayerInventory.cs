@@ -25,8 +25,8 @@ namespace Player
         public event Action<float> OnMoneyChange;
 
         private EquippedTool[] _equippedTools = new EquippedTool[MaxTools];
-
-
+        public event Action<EquippedTool> OnToolChange;
+    
         [Title("Starting Tools", "These tools will be added to the inventory when the game starts")] [SerializeField]
         private List<Tool> startingTools;
 
@@ -59,9 +59,6 @@ namespace Player
                 Debug.Log($"Adding tool {newTool.name} to inventory");
                 
                 
-                
-                
-                
                 Tool go = Instantiate(newTool, toolHolder);
 
                 go.transform.SetParent(toolHolder);
@@ -77,6 +74,7 @@ namespace Player
                 {
                     Debug.Log($"Equipping tool {newTool.name}");
                     playerInteraction.FeedUseableItem(go);
+                    OnToolChange?.Invoke(_equippedTools[i]);
                 }
 
                 return;
@@ -98,9 +96,8 @@ namespace Player
             if (!_equippedTools[_currentToolIndex].IsEmpty)
             {
                 playerInteraction.FeedUseableItem(_equippedTools[_currentToolIndex].ToolReference);
+                OnToolChange?.Invoke(_equippedTools[_currentToolIndex]);
             }
-            
-            
         }
 
         public void EquipTool()
@@ -132,7 +129,7 @@ namespace Player
         }
 
 
-        private struct EquippedTool
+        public struct EquippedTool
         {
             public bool IsEmpty;
             public Tool ToolReference;

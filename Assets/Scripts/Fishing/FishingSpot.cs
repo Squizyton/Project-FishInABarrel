@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Interfaces;
 using Player;
 using Service_Locator;
 using UnityEngine;
@@ -6,7 +7,7 @@ using UnityEngine.SceneManagement;
 
 namespace Fishing
 {
-    public class FishingSpot: MonoBehaviour
+    public class FishingSpot: MonoBehaviour,IBobberInteractive
     {
         private FishingManager _fishingManager;
 
@@ -19,14 +20,20 @@ namespace Fishing
         }
 
 
-        public void StartFishing()
+        private void StartFishing()
         {
             ServiceLocator.Instance.Locate(out PlayerMovement movement);
             movement.ChangeState(PlayerMovement.State.Fishing);
+            
             SceneManager.LoadSceneAsync("FishingScene", LoadSceneMode.Additive).completed += operation =>
             {
                 _fishingManager.StartFishing(this, ref fishThatCanSpawn);
             };
+        }
+
+        public void OnBobberEnter()
+        {
+            StartFishing();
         }
     }
 }

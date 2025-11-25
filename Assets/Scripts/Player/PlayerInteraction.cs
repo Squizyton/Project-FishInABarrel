@@ -29,12 +29,18 @@ public class PlayerInteraction : MonoBehaviour, IService
     private BaseGun currentGun;
 
 
-    [Title("Abilities")] private List<IEffect<IDamageable>> _currentEffects;
+    [Title("Abilities")] 
+    private List<IEffect<IDamageable>> _currentEffects;
 
+    
+    
     [Title("Debug Values")] public BaseGun testGun;
     [SerializeField, SerializeReference] private List<Ability> debugAbilities;
     [SerializeField] private FishingRod fishingRod;
 
+    
+    
+    
     public FishingRod CurrentRod
     {
         get
@@ -81,7 +87,6 @@ public class PlayerInteraction : MonoBehaviour, IService
     {
         if (useableItem is Tool tool)
         {
-            Debug.Log("Test");
             //Unsubscribe the current tool from the events
             _currentTool?.OnDeselect();
 

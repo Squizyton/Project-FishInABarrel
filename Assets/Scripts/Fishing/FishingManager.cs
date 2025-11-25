@@ -18,6 +18,16 @@ namespace Fishing
 
 
 
+        void Start()
+        {
+            GameManager.Instance.inventory.OnToolChange += CheckForNewFishingRod;
+        }
+
+        public void CheckForNewFishingRod(PlayerInventory.EquippedTool newEquippedTool)
+        {
+            if(newEquippedTool.ToolReference is FishingRod fishingRod)
+                currentFishingRod = fishingRod;
+        }
 
 
         public void StartFishing(FishingSpot fishingSpot,ref List<FishData> fishThatCanSpawn)
@@ -57,6 +67,8 @@ namespace Fishing
                     rb.AddForce(Vector3.up * (10 / caughtFish.fishData.weight), ForceMode.Impulse);
                 }
             }
+            
+            currentFishingRod.StopFishing();
             playerMovement.ChangeState(PlayerMovement.State.Walking);
         }
     }

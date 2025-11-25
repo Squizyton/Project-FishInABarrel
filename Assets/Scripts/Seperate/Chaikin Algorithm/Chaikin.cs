@@ -38,6 +38,7 @@ public class Chaikin : MonoBehaviour
     private Transform _transform;
     private LineRenderer _lineRenderer;
 
+    private List<Vector3> _cachedPoints = new();
 
     private void Awake()
     {
@@ -91,9 +92,9 @@ public class Chaikin : MonoBehaviour
 
 
     //So this is the actual algorithm
-    public List<Vector3> ApplyChaikinSmoothing(ref List<Vector3> pointsArray)
+    public ref List<Vector3> ApplyChaikinSmoothing(ref List<Vector3> pointsArray)
     {
-        var processedPoints = new List<Vector3>(pointsArray);
+        _cachedPoints = new List<Vector3>(pointsArray);
 
 
         for (int k = 0; k < iterations; k++)
@@ -102,13 +103,13 @@ public class Chaikin : MonoBehaviour
             List<Vector3> smoothPoints = new();
 
             //Set the count to the number of points
-            int count = processedPoints.Count;
+            int count = _cachedPoints.Count;
 
             for (int i = 0; i < count - 1; i++)
             {
                 // Chaikin's corner-cutting algorithm: generate two new points (Q and R) between p0 and p1
-                Vector3 p0 = processedPoints[i];
-                Vector3 p1 = processedPoints[(i + 1) % count];
+                Vector3 p0 = _cachedPoints[i];
+                Vector3 p1 = _cachedPoints[(i + 1) % count];
 
 
                 // This is the heart of the algorithm
@@ -130,14 +131,14 @@ public class Chaikin : MonoBehaviour
             }
 
             //Preserve the start and end points
-            smoothPoints.Insert(0,processedPoints[0]);
-            smoothPoints.Add(processedPoints[processedPoints.Count - 1]);
+            smoothPoints.Insert(0,_cachedPoints[0]);
+            smoothPoints.Add(_cachedPoints[_cachedPoints.Count - 1]);
 
 
-            processedPoints = smoothPoints;
+            _cachedPoints = smoothPoints;
         }
 
 
-        return processedPoints;
+        return ref _cachedPoints;
     }
 }

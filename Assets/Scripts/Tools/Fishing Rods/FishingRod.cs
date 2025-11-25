@@ -1,10 +1,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using Alchemy.Inspector;
 using Fishing;
-using Service_Locator;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -23,9 +21,7 @@ namespace Tools.Fishing_Rods
         public float MaxFish => maxFish;
         [SerializeField] private float chargeRate;
 
-        //Change this to a state
         private bool _castedOut;
-
 
         [Title("Bobber")] [SerializeField] private Bobber bobber;
         public Bobber Bobber => bobber;
@@ -34,103 +30,118 @@ namespace Tools.Fishing_Rods
         [Title("Fishing Start Point")] [SerializeField]
         private Transform startPoint;
 
-
         private Vector3 _endPoint;
 
         [Title("Cast Out Threshold")] [SerializeField]
-        private float castOutThreshold;
+        private float forwardForceAmount;
 
+        [SerializeField] private float upForceAmount;
+        [SerializeField] private float castOutThreshold;
 
         private bool _charging;
         private float _chargeAmount;
 
-
         [Title("Procedural Animation")] [SerializeField]
         private Chaikin curve;
 
+        [SerializeField] private float distanceBetweenEachChaikinCheck;
         [SerializeField] private LineRenderer fishingLinePrefab;
         [SerializeField] private VerletIntergration verletIntergration;
         private LineRenderer fishingLine;
 
-        
         [Title("Debug Values")] [SerializeField]
         private bool debug;
-
         [SerializeField] private bool debugFishingLine;
-        [SerializeField] private bool debugLinePhysics;
-
         [ShowIf("debugLinePhysics"), SerializeField]
         private int howManyPoints;
+
+        private Coroutine verletCoroutine;
+        private Vector3 _bobberOutPreviousPosition;
+        private readonly WaitForEndOfFrame _cachedEndOfFrame = new WaitForEndOfFrame();
+
+        // Buffer resized to 100 to start to avoid immediate resize
+        private Vector3[] linePositionsBuffer = new Vector3[100]; 
+        private List<Vector3> _smoothingCacheList = new List<Vector3>();
+
         private void Start()
         {
             fishingLine = Instantiate(fishingLinePrefab);
-            
-            if (debugLinePhysics)
-            {
-                //Create 
-                fishingLine.positionCount = howManyPoints;
-                
-                Vector3[] linePoints = new Vector3[fishingLine.positionCount];
-                
-                
-                fishingLine.GetPositions(linePoints);
-
-                for (int i = 0; i < linePoints.Length; i++)
-                {
-                    linePoints[i] = Vector3.Lerp(startPoint.transform.position, bobber.transform.position,
-                        i / (howManyPoints - 1f));
-                }
-                
-                linePoints[0] = startPoint.transform.position;
-                linePoints[howManyPoints - 1] = bobber.transform.position;
-                
-                fishingLine.SetPositions(linePoints);
-                
-                verletIntergration.SetupPoints(linePoints.ToList(),new []{0,howManyPoints-1});
-            }
         }
-
 
         public override void OnLeftClick(InputAction.CallbackContext context)
         {
-            bobber.transform.parent = startPoint;
+            bobber.rb.isKinematic = true;
+            bobber.transform.SetParent(startPoint);
             bobber.transform.position = startPoint.position;
+            bobber.castedOut = false;
+            bobber.isBusy = false;
+            
+            
+            verletIntergration.Clear();
+            fishingLine.positionCount = 0;
+
+            if (verletCoroutine != null)
+                StopCoroutine(verletCoroutine);
+
             _chargeAmount = 0;
             _charging = true;
         }
-
 
         private void Update()
         {
             if (_charging)
             {
                 _chargeAmount = Mathf.Clamp(_chargeAmount + Time.deltaTime, 0, 1);
-                Debug.Log(_chargeAmount);
+                bobber.transform.position = startPoint.position;
             }
-
-
-
-            if (debugLinePhysics)
+        }
+        
+        // FIX 2: You likely need to run the physics simulation here or in FixedUpdate
+        private void FixedUpdate()
+        {
+            if (_castedOut)
             {
-                // fishingLine.SetPosition(0, startPoint.position);
-                // fishingLine.SetPosition(fishingLine.positionCount-1, bobber.transform.position);
+                // Assuming your verlet script has a Simulate method. 
+                // If not, ensure the logic inside VerletIntegration runs automatically.
+                // verletIntergration.Simulate(Time.fixedDeltaTime); 
+            }
+        }
 
+        private void LateUpdate()
+        {
+            if (_castedOut)
+            {
+                // FIX 1: Ensure this returns a LIST (Ordered), not a HashSet
+                var rawPoints = verletIntergration.ReturnRawPoints();
+                int pointCount = rawPoints.Count;
 
-                // Vector3[] linePoints = new Vector3[fishingLine.positionCount];
-                // fishingLine.GetPositions(linePoints);
-                
-                //verletIntergration.UpdateEachPointCurrentPosition(linePoints.ToList());
-                
-                
-                
-                verletIntergration.UpdatePointIndex(0,startPoint.position);
-                verletIntergration.UpdatePointIndex(howManyPoints-1,bobber.transform.position);
-                
-                fishingLine.SetPositions(verletIntergration.ReturnRawPoints().ToArray());
-                
-                
+                if (pointCount > 1)
+                {
+                    // Update ends to pin the rope
+                    verletIntergration.UpdatePointIndex(0, startPoint.position);
+                    verletIntergration.UpdatePointIndex(pointCount - 1, bobber.transform.position);
+
+                    // Pass the list to the renderer
+                    UpdateLineRenderer(rawPoints);
+                }
+            }
+        }
+
+        // FIX 1: Changed parameter from HashSet to List<Vector3> to preserve order
+        private void UpdateLineRenderer(List<Vector3> rawPoints)
+        {
+            int count = rawPoints.Count;
+
+            if (linePositionsBuffer.Length < count)
+            {
+                Array.Resize(ref linePositionsBuffer, count * 2);
             }
 
+            // CopyTo works correctly on Lists/Arrays (Ordered)
+            rawPoints.CopyTo(linePositionsBuffer);
+
+            fishingLine.positionCount = count;
+            fishingLine.SetPositions(linePositionsBuffer);
         }
 
         public override void OnLeftClickUp(InputAction.CallbackContext context)
@@ -145,58 +156,89 @@ namespace Tools.Fishing_Rods
             bobber.transform.parent = null;
             _charging = false;
 
+            _bobberOutPreviousPosition = bobber.transform.position;
             var playerCamera = StaticUtilities.GetMainCamera();
 
-            Debug.Log("Casting Out");
+            bobber.rb.isKinematic = false;
+            bobber.isBusy = false;
+            bobber.rb.AddForce(playerCamera.transform.forward * (forwardForceAmount * chargeAmount), ForceMode.Impulse);
+            bobber.castedOut = true; // Assumes this is a public field on Bobber
+            
+            bobber.rb.AddForce(Vector3.up * upForceAmount, ForceMode.Impulse);
 
-            if (Physics.Raycast(playerCamera.transform.position, playerCamera.transform.forward, out var hit,
-                    Mathf.Infinity))
-            {
-                Debug.Log(hit.transform.name);
+            verletIntergration.UpdateGravityDirection(Vector3.up);
 
+            // Setup initial points so we have something to render immediately
+            InitializeVerletLine();
 
-                //Get the destination based on charge
-                _endPoint = Vector3.Lerp(startPoint.position, hit.point, chargeAmount);
-
-                //SEt the y of the end point to the y of the hit point
-                _endPoint.y = hit.point.y;
-
-                StartCoroutine(CastInCoroutine());
-            }
-
+            verletCoroutine = StartCoroutine(UpdateVerletAfterBobberLanding());
             _castedOut = true;
         }
 
-
-        //TODO: This can probably not be done in a coroutine, but for now it's fine
-
-        private WaitForEndOfFrame cachedForEndOfFrame = new WaitForEndOfFrame();
-
-        IEnumerator CastInCoroutine()
+        private void InitializeVerletLine()
         {
-            float timer = 0;
+             _smoothingCacheList.Clear();
+             _smoothingCacheList.Add(startPoint.position);
+             _smoothingCacheList.Add(bobber.transform.position);
+             
+             // Initial straight line setup
+             var initialPoints = curve.ApplyChaikinSmoothing(ref _smoothingCacheList);
+             verletIntergration.SetupPoints(initialPoints, new[] { 0, initialPoints.Count - 1 });
+        }
 
-            while (timer < bobberTravelTime)
+        private IEnumerator UpdateVerletAfterBobberLanding()
+        {
+            yield return _cachedEndOfFrame;
+
+            while (bobber.rb.linearVelocity.sqrMagnitude > 0.0001f)
             {
-                yield return cachedForEndOfFrame;
-                bobber.transform.position =
-                    Vector3.Lerp(bobber.transform.position, _endPoint, timer / bobberTravelTime);
-                timer += Time.deltaTime;
+                float distSq = (startPoint.position - bobber.transform.position).sqrMagnitude;
+                float threshSq = distanceBetweenEachChaikinCheck * distanceBetweenEachChaikinCheck;
+
+
+                if (distSq > threshSq)
+                {
+                    _smoothingCacheList.Clear();
+                    _smoothingCacheList.Add(startPoint.position);
+                    _smoothingCacheList.Add(bobber.transform.position);
+                    
+                    var smoothedPoints = curve.ApplyChaikinSmoothing(ref _smoothingCacheList);
+
+                    verletIntergration.SetupPoints(smoothedPoints, new[] { 0, smoothedPoints.Count - 1 });
+
+                    fishingLine.positionCount = smoothedPoints.Count;
+                }
+
+                _bobberOutPreviousPosition = bobber.transform.position;
+                yield return _cachedEndOfFrame;
             }
+
+            // Once stopped, we switch gravity down and stop resetting the points
+            // allowing the line to finally sag.
+            verletIntergration.UpdateGravityDirection(Vector2.down);
+        }
+        [Button]
+        public void SimulateFishing()
+        {
+            _castedOut = false;
+            bobber.rb.isKinematic = true;
+            bobber.isBusy = false;
+            
+            bobber.transform.SetParent(startPoint.transform);
+            bobber.transform.position = startPoint.position;
+            fishingLine.positionCount = 0;
+            
+            verletIntergration.Clear();
+            CastOut(1);
         }
 
-        private void CastIn()
+        public void StopFishing()
         {
-            Debug.Log("Cast In");
-        }
-
-        void OnDrawGizmosSelected()
-        {
-            if (!debug) return;
-
-
-            Gizmos.color = Color.burlywood;
-            Gizmos.DrawSphere(_endPoint, 0.15f);
+            _castedOut = false;
+            bobber.castedOut = false;
+            bobber.isBusy = false;
+            bobber.rb.isKinematic = true;
+            bobber.transform.parent = startPoint.transform;
         }
     }
 }
