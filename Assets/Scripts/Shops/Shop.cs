@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Alchemy.Inspector;
+using Managers;
+using Service_Locator;
+using Shops;
 using UnityEditorInternal.Profiling.Memory.Experimental;
 using UnityEngine;
 using Random = UnityEngine.Random;
@@ -24,6 +27,7 @@ public class Shop : MonoBehaviour, IOnInteract
         UpgradeShop
     }
 
+    public ShopType shopType;
 
     private void Start()
     {
@@ -43,9 +47,12 @@ public class Shop : MonoBehaviour, IOnInteract
             for (int i = 0; i < amountOfItems; i++)
             {
                 //Test
-                _currentItems.Add(new BuyableItem {id = i, price = Random.Range(500,5000)});
+                _currentItems.Add(new BuyableItem {id = i, price = Random.Range(500,5000), name = $"Test {i}"});
             }
         }
+
+        ServiceLocator.Instance.Locate<ShopUI>(out var shopUI);
+        shopUI.OpenShop(shopType,_shopId,this);
     }
 
     public virtual void BuyItem(int id)
@@ -71,7 +78,7 @@ public class Shop : MonoBehaviour, IOnInteract
 
 }
 
-
+//TODO:: MAke this scriptable objects, I don't know what I'm doing here, I just really need to stop over complicating things
 public struct BuyableItem
 {
     public int id;

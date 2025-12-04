@@ -8,7 +8,7 @@ namespace Shops.UIElements
     {
         private Image _image;
         
-        private void Start()
+        private void Awake()
         {
             _image = gameObject.AddComponent<Image>();
         }

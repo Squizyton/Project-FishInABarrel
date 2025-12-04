@@ -8,15 +8,18 @@ namespace Shops.UIElements
         private TextMeshProUGUI _text;
 
 
-        private void OnStart()
+        private void Awake()
         {
-            
+            _text = gameObject.AddComponent<TextMeshProUGUI>();
         }
 
         public override void OnInitialize<T>(T data)
         {
-            if(data is string text)
+            if (data is string text)
+            {
+                Debug.Log(text);
                 _text.text = text;
+            }
         }
     }
 }

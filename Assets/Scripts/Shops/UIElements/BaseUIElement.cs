@@ -5,6 +5,5 @@ namespace Shops.UIElements
 {
     public class BaseUIElement : UIElement
     {
-        [SerializeField]private Dictionary<string, Transform> anchorPoints;
     }
 }

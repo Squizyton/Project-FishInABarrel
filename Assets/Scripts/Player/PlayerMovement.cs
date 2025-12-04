@@ -22,6 +22,7 @@
                 Idle,
                 Walking,
                 Fishing,
+                Shopping,
             }
 
             public State CurrentState { get; private set; }
